@@ -2,6 +2,7 @@
   "expo": {
     "name": "Village Calendar",
     "slug": "village-calendar",
+    "owner": "devapphero",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.villagecalendar.app"
+      "bundleIdentifier": "com.villagecalendar.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCalendarsUsageDescription": "This app needs access to your calendar to help coordinate childcare events.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "This app needs to add childcare events to your calendar."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,9 +34,15 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "description": "Quickly generate React Native components with AI",
+    "description": "A mobile app for community childcare coordination. Parents post help requests, helpers volunteer to assist.",
+    "privacy": "https://your-website.com/privacy-policy",
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8a926f6e-f3c2-4eed-be58-4df3a97c04c7"
+      }
+    }
   }
 }
