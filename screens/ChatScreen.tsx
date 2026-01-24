@@ -16,6 +16,7 @@ import { api } from '../convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../lib/theme';
 import * as Calendar from 'expo-calendar';
+import { triggerLightImpact } from '../utils/haptics';
 
 interface Props {
   route: {
@@ -55,6 +56,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     try {
       await sendMessage({ requestId, text: text.trim() });
       setText('');
+      triggerLightImpact();
     } catch (error: any) {
       Alert.alert('Error', error?.message ?? 'Failed to send');
     } finally {
@@ -162,9 +164,14 @@ export default function ChatScreen({ route, navigation }: Props) {
         <FlatList
           ref={flatListRef}
           data={messages ?? []}
-          keyExtractor={(item: any) => item.id}
+          keyExtractor={(item: any) => `message-${item.id}`}
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
+          getItemLayout={(data, index) => ({
+            length: 100,
+            offset: 100 * index,
+            index,
+          })}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.gray.medium} />
@@ -174,6 +181,11 @@ export default function ChatScreen({ route, navigation }: Props) {
               </Text>
             </View>
           }
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={15}
+          initialNumToRender={5}
+          inverted={false}
         />
 
         <View style={styles.inputContainer}>

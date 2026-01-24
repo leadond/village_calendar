@@ -1,3 +1,5 @@
+import { moderateScale } from './font-scaling';
+
 export const theme = {
   colors: {
     primary: '#60B2B0', // Soft teal
@@ -38,6 +40,14 @@ export const theme = {
     medium: 'Inter_500Medium',
     semibold: 'Inter_600SemiBold',
     bold: 'Inter_700Bold',
+  },
+  fontSizes: {
+    xs: moderateScale(12),
+    sm: moderateScale(14),
+    md: moderateScale(16),
+    lg: moderateScale(18),
+    xl: moderateScale(24),
+    xxl: moderateScale(32),
   },
   buttonHeight: 44, // Minimum tap target for mobile
 };

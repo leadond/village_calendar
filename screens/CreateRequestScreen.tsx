@@ -13,10 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
+import { showSuccess } from '../utils/notifications';
+import { triggerSuccessHaptic } from '../utils/haptics';
+import { trackRequestCreated } from '../utils/analytics';
 
 import { theme } from '../lib/theme';
 import { Ionicons } from '@expo/vector-icons';
-
 interface Props {
   profile: {
     villageId: any;
@@ -56,16 +58,17 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
 
     setSaving(true);
     try {
-      await createRequest({
+      const requestId = await createRequest({
         villageId: profile.villageId,
         title: title.trim(),
         description: description.trim(),
         date,
         time,
       });
-      Alert.alert('Success', 'Your help request has been posted!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      trackRequestCreated({ villageId: profile.villageId, requestId });
+      triggerSuccessHaptic();
+      showSuccess('Your help request has been posted!');
+      navigation.goBack();
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to create request');
       setSaving(false);

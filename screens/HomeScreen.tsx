@@ -7,15 +7,19 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { useNavigation } from '@react-navigation/native';
+import { showSuccess } from '../utils/notifications';
+import { triggerSuccessHaptic } from '../utils/haptics';
+import { trackRequestClaimed } from '../utils/analytics';
 
 import { theme } from '../lib/theme';
 import { Ionicons } from '@expo/vector-icons';
-
+import Skeleton from '../components/Skeleton';
 interface Props {
   profile: {
     id: string;
@@ -26,18 +30,41 @@ interface Props {
   };
 }
 
+const RequestSkeleton = () => (
+  <View style={styles.card}>
+    <View style={styles.cardHeader}>
+      <Skeleton width={150} height={20} />
+      <Skeleton width={60} height={20} />
+    </View>
+    <Skeleton width="100%" height={24} style={{ marginBottom: 6 }} />
+    <Skeleton width="80%" height={20} />
+    <View style={styles.cardFooter}>
+      <Skeleton width={120} height={16} />
+    </View>
+    <Skeleton width="100%" height={48} style={{ marginTop: 12 }} />
+  </View>
+);
+
 export default function HomeScreen({ profile }: Props) {
   const navigation = useNavigation<any>();
 
   const requests = useQuery(api.helpRequests.getVillageRequests, { villageId: profile.villageId });
+  const [isClaiming, setIsClaiming] = React.useState<string | null>(null);
 
   const claimRequest = useMutation(api.helpRequests.claimRequest);
 
   const handleClaim = async (requestId: any) => {
+    if (isClaiming) return;
+    setIsClaiming(requestId);
     try {
       await claimRequest({ requestId });
+      trackRequestClaimed({ villageId: profile.villageId, requestId });
+      triggerSuccessHaptic();
+      showSuccess("You're helping out!");
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to claim request');
+    } finally {
+      setIsClaiming(null);
     }
   };
 
@@ -77,7 +104,9 @@ export default function HomeScreen({ profile }: Props) {
         <View style={styles.cardHeader}>
           <View style={styles.dateTimeContainer}>
             <Ionicons name="calendar-outline" size={16} color={theme.colors.primary} />
-            <Text style={styles.dateTime}>{formatDate(item.date)} at {item.time}</Text>
+            <Text style={styles.dateTime}>
+              {formatDate(item.date)} at {item.time}
+            </Text>
           </View>
           <View style={[styles.statusBadge, isOpen ? styles.statusOpen : styles.statusClaimed]}>
             <Text style={styles.statusText}>{isOpen ? 'Open' : 'Claimed'}</Text>
@@ -89,20 +118,35 @@ export default function HomeScreen({ profile }: Props) {
 
         <View style={styles.cardFooter}>
           <Text style={styles.postedBy}>Posted by {item.createdByName}</Text>
-          {item.claimedByName && (
-            <Text style={styles.claimedBy}>Helping: {item.claimedByName}</Text>
-          )}
+          {item.claimedByName && <Text style={styles.claimedBy}>Helping: {item.claimedByName}</Text>}
         </View>
 
         {canClaim && (
-          <TouchableOpacity style={styles.claimButton} onPress={() => handleClaim(item.id)}>
-            <Ionicons name="hand-left" size={20} color={theme.colors.white} />
-            <Text style={styles.claimButtonText}>I'll Help!</Text>
+          <TouchableOpacity
+            style={styles.claimButton}
+            onPress={() => handleClaim(item.id)}
+            disabled={isClaiming === item.id}
+            accessibilityRole="button"
+            accessibilityLabel={`I'll help with ${item.title}`}
+          >
+            {isClaiming === item.id ? (
+              <ActivityIndicator color={theme.colors.white} />
+            ) : (
+              <>
+                <Ionicons name="hand-left" size={20} color={theme.colors.white} />
+                <Text style={styles.claimButtonText}>I'll Help!</Text>
+              </>
+            )}
           </TouchableOpacity>
         )}
 
         {canChat && (
-          <TouchableOpacity style={styles.chatButton} onPress={openChat}>
+          <TouchableOpacity
+            style={styles.chatButton}
+            onPress={openChat}
+            accessibilityRole="button"
+            accessibilityLabel={`Message about ${item.title}`}
+          >
             <Ionicons name="chatbubble-outline" size={18} color={theme.colors.primary} />
             <Text style={styles.chatButtonText}>Message</Text>
           </TouchableOpacity>
@@ -113,6 +157,41 @@ export default function HomeScreen({ profile }: Props) {
 
   const openRequests = requests?.filter((r: any) => r.status === 'open') || [];
   const claimedRequests = requests?.filter((r: any) => r.status === 'claimed') || [];
+
+  if (requests === undefined) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Hello, {profile.name}!</Text>
+            <Text style={styles.villageName}>{profile.villageName}</Text>
+          </View>
+          <View style={styles.roleBadge}>
+            <Ionicons
+              name={profile.role === 'parent' ? 'home' : 'heart'}
+              size={14}
+              color={theme.colors.primary}
+            />
+            <Text style={styles.roleText}>{profile.role === 'parent' ? 'Parent' : 'Helper'}</Text>
+          </View>
+        </View>
+        <FlatList
+          data={[1, 2, 3]}
+          renderItem={() => <RequestSkeleton />}
+          keyExtractor={(item) => `skeleton-${item}`}
+          contentContainerStyle={styles.listContent}
+          getItemLayout={(data, index) => ({
+            length: 230,
+            offset: 230 * index,
+            index,
+          })}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -134,8 +213,13 @@ export default function HomeScreen({ profile }: Props) {
       <FlatList
         data={[...openRequests, ...claimedRequests]}
         renderItem={renderRequest}
-        keyExtractor={(item: any) => item.id}
+        keyExtractor={(item: any) => `request-${item.id}`}
         contentContainerStyle={styles.listContent}
+        getItemLayout={(data, index) => ({
+          length: 230,
+          offset: 230 * index,
+          index,
+        })}
         refreshControl={<RefreshControl refreshing={false} tintColor={theme.colors.primary} />}
         ListHeaderComponent={
           openRequests.length > 0 ? (
@@ -155,6 +239,10 @@ export default function HomeScreen({ profile }: Props) {
             </Text>
           </View>
         }
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={5}
+        windowSize={10}
+        initialNumToRender={5}
       />
     </SafeAreaView>
   );
@@ -176,12 +264,12 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.colors.gray.light,
   },
   greeting: {
-    fontSize: 24,
+    fontSize: theme.fontSizes.xl,
     fontWeight: 'bold',
     color: theme.colors.text.primary,
   },
   villageName: {
-    fontSize: 15,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.text.secondary,
     marginTop: 2,
   },
@@ -195,7 +283,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   roleText: {
-    fontSize: 13,
+    fontSize: theme.fontSizes.xs,
     color: theme.colors.primary,
     fontWeight: '500',
   },
@@ -204,7 +292,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: theme.fontSizes.lg,
     fontWeight: '600',
     color: theme.colors.text.primary,
     marginBottom: 12,
@@ -235,7 +323,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   dateTime: {
-    fontSize: 14,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.primary,
     fontWeight: '500',
   },
@@ -251,17 +339,17 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.status.claimed + '20',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: theme.fontSizes.xs,
     fontWeight: '600',
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: theme.fontSizes.lg,
     fontWeight: '600',
     color: theme.colors.text.primary,
     marginBottom: 6,
   },
   cardDescription: {
-    fontSize: 15,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.text.secondary,
     lineHeight: 22,
     marginBottom: 12,
@@ -272,11 +360,11 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   postedBy: {
-    fontSize: 13,
+    fontSize: theme.fontSizes.xs,
     color: theme.colors.text.secondary,
   },
   claimedBy: {
-    fontSize: 13,
+    fontSize: theme.fontSizes.xs,
     color: theme.colors.status.claimed,
     fontWeight: '500',
     marginTop: 4,
@@ -293,7 +381,7 @@ const styles = StyleSheet.create({
   },
   claimButtonText: {
     color: theme.colors.white,
-    fontSize: 16,
+    fontSize: theme.fontSizes.md,
     fontWeight: '600',
   },
   chatButton: {
@@ -308,7 +396,7 @@ const styles = StyleSheet.create({
   },
   chatButtonText: {
     color: theme.colors.primary,
-    fontSize: 15,
+    fontSize: theme.fontSizes.sm,
     fontWeight: '600',
   },
   emptyContainer: {
@@ -316,13 +404,13 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: theme.fontSizes.xl,
     fontWeight: '600',
     color: theme.colors.text.primary,
     marginTop: 16,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.text.secondary,
     textAlign: 'center',
     marginTop: 8,

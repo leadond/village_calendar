@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { theme } from '../lib/theme';
+import { trackUserSignup } from '../utils/analytics';
 
 interface Props {
   navigation: any;
@@ -45,6 +46,7 @@ export default function SignupScreen({ navigation }: Props) {
     setLoading(true);
     try {
       await signIn('password', { email: email.trim().toLowerCase(), password, flow: 'signUp' });
+      trackUserSignup();
     } catch (error: any) {
       Alert.alert('Signup Failed', error?.message || 'Unable to create account');
     } finally {
@@ -73,6 +75,8 @@ export default function SignupScreen({ navigation }: Props) {
               autoCapitalize="none"
               keyboardType="email-address"
               placeholderTextColor={theme.colors.gray.medium}
+              accessibilityLabel="Email input"
+              accessibilityHint="Enter your email address"
             />
 
             <TextInput
@@ -82,6 +86,8 @@ export default function SignupScreen({ navigation }: Props) {
               onChangeText={setPassword}
               secureTextEntry
               placeholderTextColor={theme.colors.gray.medium}
+              accessibilityLabel="Password input"
+              accessibilityHint="Enter a password of at least 6 characters"
             />
 
             <TextInput
@@ -91,12 +97,17 @@ export default function SignupScreen({ navigation }: Props) {
               onChangeText={setConfirmPassword}
               secureTextEntry
               placeholderTextColor={theme.colors.gray.medium}
+              accessibilityLabel="Confirm password input"
+              accessibilityHint="Re-enter your password to confirm"
             />
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleSignup}
               disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel="Create Account"
+              accessibilityHint="Creates your Village Calendar account"
             >
               {loading ? (
                 <ActivityIndicator color={theme.colors.white} />
@@ -108,6 +119,10 @@ export default function SignupScreen({ navigation }: Props) {
             <TouchableOpacity
               style={styles.linkButton}
               onPress={() => navigation.navigate('Login')}
+              accessibilityRole="link"
+              accessibilityLabel="Sign In"
+              accessibilityHint="Navigates to the sign in screen"
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
             >
               <Text style={styles.linkText}>
                 Already have an account? <Text style={styles.linkTextBold}>Sign In</Text>
@@ -138,13 +153,13 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   title: {
-    fontSize: 32,
+    fontSize: theme.fontSizes.xxl,
     fontWeight: 'bold',
     color: theme.colors.primary,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: theme.fontSizes.md,
     color: theme.colors.text.secondary,
   },
   form: {
@@ -154,7 +169,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
     borderRadius: 12,
     padding: 16,
-    fontSize: 16,
+    fontSize: theme.fontSizes.md,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: theme.colors.gray.light,
@@ -172,7 +187,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: theme.colors.white,
-    fontSize: 17,
+    fontSize: theme.fontSizes.lg,
     fontWeight: '600',
   },
   linkButton: {
@@ -181,7 +196,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: theme.colors.text.secondary,
-    fontSize: 15,
+    fontSize: theme.fontSizes.sm,
   },
   linkTextBold: {
     color: theme.colors.primary,

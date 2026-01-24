@@ -84,7 +84,12 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
 
       <FlatList
         data={[{ key: 'content' }]}
-        keyExtractor={(i: any) => i.key}
+        keyExtractor={(i: any) => `admin-${i.key}`}
+        getItemLayout={(data, index) => ({
+          length: 800,
+          offset: 800 * index,
+          index,
+        })}
         renderItem={() => (
           <View style={styles.content}>
             <Text style={styles.sectionTitle}>Overview</Text>
@@ -116,7 +121,7 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
                 {admins.map((a: any) => {
                   const user = userLookup.get(a.userId);
                   return (
-                    <View key={a.id} style={styles.row}>
+                    <View key={`admin-${a.id}`} style={styles.row}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.rowTitle} numberOfLines={1}>
                           {user?.name ?? a.name ?? a.userId}
@@ -175,7 +180,7 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
             ) : (
               <View style={styles.card}>
                 {(users ?? []).slice(0, 50).map((u: any) => (
-                  <View key={u.userId} style={styles.row}>
+                  <View key={`user-${u.userId}`} style={styles.row}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rowTitle} numberOfLines={1}>
                         {u.name}
@@ -198,6 +203,10 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
             )}
           </View>
         )}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        initialNumToRender={1}
       />
     </SafeAreaView>
   );

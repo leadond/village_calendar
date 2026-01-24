@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { api } from '../convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../lib/theme';
+import Skeleton from '../components/Skeleton';
 
 type Mode = 'day' | 'week' | 'month';
 
@@ -17,6 +18,38 @@ interface Props {
     villageName: string;
   };
 }
+
+const DayViewSkeleton = () => (
+  <View style={{ padding: 16 }}>
+    <Skeleton width="100%" height={40} style={{ marginBottom: 16 }} />
+    <Skeleton width="100%" height={120} style={{ marginBottom: 12 }} />
+    <Skeleton width="100%" height={120} style={{ marginBottom: 12 }} />
+  </View>
+);
+
+const MonthViewSkeleton = () => (
+  <View style={{ paddingHorizontal: 12, paddingTop: 14 }}>
+    <View style={styles.monthHeader}>
+      <Skeleton width={36} height={36} style={{ borderRadius: 18 }} />
+      <Skeleton width={150} height={24} />
+      <Skeleton width={36} height={36} style={{ borderRadius: 18 }} />
+    </View>
+    <View style={styles.dowRow}>
+      {Array.from({ length: 7 }).map((_, i) => (
+        <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+          <Skeleton width="50%" height={12} />
+        </View>
+      ))}
+    </View>
+    <View style={styles.grid}>
+      {Array.from({ length: 42 }).map((_, i) => (
+        <View key={i} style={{ width: '14.2857%', aspectRatio: 1, padding: 4 }}>
+          <Skeleton width="100%" height="100%" />
+        </View>
+      ))}
+    </View>
+  </View>
+);
 
 
 function isoToday(): string {
@@ -106,6 +139,8 @@ export default function CalendarScreen({ profile }: Props) {
   const villageEvents = useQuery(api.events.getVillageEvents as any, {
     villageId: profile.villageId,
   });
+  
+  const isLoading = requests === undefined || villageEvents === undefined;
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, any[]> = {};
@@ -126,6 +161,37 @@ export default function CalendarScreen({ profile }: Props) {
     }
     return map;
   }, [requests, villageEvents]);
+
+  // Memoize week calculation
+  const weekDays = useMemo(() => {
+    if (mode !== 'week') return [];
+    const weekStart = startOfWeekMonday(selectedDate);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      return toISODate(d);
+    });
+  }, [selectedDate, mode]);
+
+  // Memoize month calculation
+  const monthCells = useMemo(() => {
+    if (mode !== 'month') return [];
+    const year = visibleMonth.getFullYear();
+    const month = visibleMonth.getMonth();
+    const first = new Date(year, month, 1);
+    const startOffset = (first.getDay() + 6) % 7; // Monday start
+    const gridStart = new Date(year, month, 1 - startOffset);
+
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(gridStart);
+      d.setDate(gridStart.getDate() + i);
+      const iso = toISODate(d);
+      const inMonth = d.getMonth() === month;
+      const isSelected = iso === selectedDate;
+      const count = eventsByDate[iso]?.length ?? 0;
+      return { iso, day: d.getDate(), inMonth, isSelected, count };
+    });
+  }, [visibleMonth, selectedDate, mode, eventsByDate]);
 
   const dayEvents = (eventsByDate[selectedDate] ?? []) as any[];
 
@@ -163,93 +229,106 @@ export default function CalendarScreen({ profile }: Props) {
   const renderDay = () => (
     <View style={{ flex: 1 }}>
       <View style={styles.dayHeader}>
-        <TouchableOpacity onPress={() => setSelectedDate(addDays(selectedDate, -1))} style={styles.navIcon}>
+        <TouchableOpacity
+          onPress={() => setSelectedDate(addDays(selectedDate, -1))}
+          style={styles.navIcon}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          accessibilityRole="button"
+          accessibilityLabel="Previous day"
+        >
           <Ionicons name="chevron-back" size={22} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.dayTitle}>{formatDayTitle(selectedDate)}</Text>
-        <TouchableOpacity onPress={() => setSelectedDate(addDays(selectedDate, 1))} style={styles.navIcon}>
+        <TouchableOpacity
+          onPress={() => setSelectedDate(addDays(selectedDate, 1))}
+          style={styles.navIcon}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          accessibilityRole="button"
+          accessibilityLabel="Next day"
+        >
           <Ionicons name="chevron-forward" size={22} color={theme.colors.text.primary} />
         </TouchableOpacity>
       </View>
-
-      <FlatList
-        data={dayEvents}
-        keyExtractor={(item: any) => item.id}
-        renderItem={renderEvent}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={56} color={theme.colors.gray.medium} />
-            <Text style={styles.emptyTitle}>No events</Text>
-            <Text style={styles.emptyText}>Nothing scheduled for this day.</Text>
-          </View>
-        }
-      />
+      {isLoading ? <DayViewSkeleton/> : (
+        <FlatList
+          data={dayEvents}
+          keyExtractor={(item: any) => `event-${item.id}`}
+          renderItem={renderEvent}
+          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+          getItemLayout={(data, index) => ({
+            length: 190,
+            offset: 190 * index,
+            index,
+          })}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={56} color={theme.colors.gray.medium} />
+              <Text style={styles.emptyTitle}>No events</Text>
+              <Text style={styles.emptyText}>Nothing scheduled for this day.</Text>
+            </View>
+          }
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={3}
+        />
+      )}
     </View>
   );
 
-  const renderWeek = () => {
-    const weekStart = startOfWeekMonday(selectedDate);
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      return toISODate(d);
-    });
-
-    return (
-      <View style={{ flex: 1 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekStrip}>
-          {days.map((iso) => {
-            const isSelected = iso === selectedDate;
-            const d = new Date(`${iso}T00:00:00`);
-            const count = eventsByDate[iso]?.length ?? 0;
-            return (
-              <TouchableOpacity
-                key={iso}
-                style={[styles.weekDayChip, isSelected && styles.weekDayChipSelected]}
-                onPress={() => setSelectedDate(iso)}
-              >
-                <Text style={[styles.weekDayName, isSelected && styles.weekDayNameSelected]}>
-                  {d.toLocaleDateString('en-US', { weekday: 'short' })}
-                </Text>
-                <Text style={[styles.weekDayNumber, isSelected && styles.weekDayNumberSelected]}>
-                  {d.getDate()}
-                </Text>
-                {count > 0 ? <View style={styles.weekDot} /> : <View style={styles.weekDotPlaceholder} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-        {renderDay()}
-      </View>
-    );
-  };
+  const renderWeek = () => (
+    <View style={{ flex: 1 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekStrip}>
+        {weekDays.map((iso) => {
+          const isSelected = iso === selectedDate;
+          const d = new Date(`${iso}T00:00:00`);
+          const count = eventsByDate[iso]?.length ?? 0;
+          return (
+            <TouchableOpacity
+              key={iso}
+              style={[styles.weekDayChip, isSelected && styles.weekDayChipSelected]}
+              onPress={() => setSelectedDate(iso)}
+            >
+              <Text style={[styles.weekDayName, isSelected && styles.weekDayNameSelected]}>
+                {d.toLocaleDateString('en-US', { weekday: 'short' })}
+              </Text>
+              <Text style={[styles.weekDayNumber, isSelected && styles.weekDayNumberSelected]}>
+                {d.getDate()}
+              </Text>
+              {count > 0 ? <View style={styles.weekDot} /> : <View style={styles.weekDotPlaceholder} />}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      {renderDay()}
+    </View>
+  );
 
   const renderMonth = () => {
-    const year = visibleMonth.getFullYear();
-    const month = visibleMonth.getMonth();
-    const first = new Date(year, month, 1);
-    const startOffset = (first.getDay() + 6) % 7; // Monday start
-    const gridStart = new Date(year, month, 1 - startOffset);
-
-    const cells = Array.from({ length: 42 }, (_, i) => {
-      const d = new Date(gridStart);
-      d.setDate(gridStart.getDate() + i);
-      const iso = toISODate(d);
-      const inMonth = d.getMonth() === month;
-      const isSelected = iso === selectedDate;
-      const count = eventsByDate[iso]?.length ?? 0;
-      return { iso, day: d.getDate(), inMonth, isSelected, count };
-    });
+    if (isLoading) {
+      return <MonthViewSkeleton/>
+    }
 
     return (
       <View style={{ flex: 1 }}>
         <View style={styles.monthHeader}>
-          <TouchableOpacity onPress={() => setVisibleMonth((m: Date) => addMonths(m, -1))} style={styles.navIcon}>
+          <TouchableOpacity
+            onPress={() => setVisibleMonth((m: Date) => addMonths(m, -1))}
+            style={styles.navIcon}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            accessibilityRole="button"
+            accessibilityLabel="Previous month"
+          >
             <Ionicons name="chevron-back" size={22} color={theme.colors.text.primary} />
           </TouchableOpacity>
           <Text style={styles.monthTitle}>{formatMonthTitle(visibleMonth)}</Text>
-          <TouchableOpacity onPress={() => setVisibleMonth((m: Date) => addMonths(m, 1))} style={styles.navIcon}>
+          <TouchableOpacity
+            onPress={() => setVisibleMonth((m: Date) => addMonths(m, 1))}
+            style={styles.navIcon}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            accessibilityRole="button"
+            accessibilityLabel="Next month"
+          >
             <Ionicons name="chevron-forward" size={22} color={theme.colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -263,7 +342,7 @@ export default function CalendarScreen({ profile }: Props) {
         </View>
 
         <View style={styles.grid}>
-          {cells.map((c) => (
+          {monthCells.map((c) => (
             <TouchableOpacity
               key={c.iso}
               style={[
@@ -305,7 +384,13 @@ export default function CalendarScreen({ profile }: Props) {
             <Text style={styles.title}>Calendar</Text>
             <Text style={styles.subtitle}>{profile.villageName}</Text>
           </View>
-          <TouchableOpacity style={styles.addEventBtn} onPress={() => navigation.navigate('CreateEvent')}>
+          <TouchableOpacity
+            style={styles.addEventBtn}
+            onPress={() => navigation.navigate('CreateEvent')}
+            accessibilityRole="button"
+            accessibilityLabel="Add Event"
+            accessibilityHint="Opens a screen to create a new village event"
+          >
             <Ionicons name="add" size={22} color={theme.colors.white} />
           </TouchableOpacity>
         </View>
@@ -313,18 +398,27 @@ export default function CalendarScreen({ profile }: Props) {
           <TouchableOpacity
             style={[styles.segmentBtn, mode === 'day' && styles.segmentBtnActive]}
             onPress={() => setMode('day')}
+            accessibilityRole="button"
+            accessibilityLabel="Day view"
+            accessibilityHint="Switches to the day view of the calendar"
           >
             <Text style={[styles.segmentText, mode === 'day' && styles.segmentTextActive]}>Day</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.segmentBtn, mode === 'week' && styles.segmentBtnActive]}
             onPress={() => setMode('week')}
+            accessibilityRole="button"
+            accessibilityLabel="Week view"
+            accessibilityHint="Switches to the week view of the calendar"
           >
             <Text style={[styles.segmentText, mode === 'week' && styles.segmentTextActive]}>Week</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.segmentBtn, mode === 'month' && styles.segmentBtnActive]}
             onPress={() => setMode('month')}
+            accessibilityRole="button"
+            accessibilityLabel="Month view"
+            accessibilityHint="Switches to the month view of the calendar"
           >
             <Text style={[styles.segmentText, mode === 'month' && styles.segmentTextActive]}>Month</Text>
           </TouchableOpacity>
@@ -362,13 +456,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: theme.fontSizes.xl,
     fontWeight: 'bold',
     color: theme.colors.text.primary,
   },
   subtitle: {
     marginTop: 2,
-    fontSize: 14,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.text.secondary,
   },
   segment: {
@@ -393,7 +487,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   segmentText: {
-    fontSize: 13,
+    fontSize: theme.fontSizes.xs,
     fontWeight: '600',
     color: theme.colors.text.secondary,
   },
@@ -409,7 +503,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   monthTitle: {
-    fontSize: 18,
+    fontSize: theme.fontSizes.lg,
     fontWeight: '600',
     color: theme.colors.text.primary,
   },
@@ -431,7 +525,7 @@ const styles = StyleSheet.create({
   dowText: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: theme.fontSizes.xs,
     fontWeight: '600',
     color: theme.colors.text.secondary,
   },
@@ -459,7 +553,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   cellText: {
-    fontSize: 14,
+    fontSize: theme.fontSizes.sm,
     fontWeight: '600',
     color: theme.colors.text.primary,
   },
@@ -488,7 +582,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   monthHintText: {
-    fontSize: 13,
+    fontSize: theme.fontSizes.xs,
     color: theme.colors.text.secondary,
   },
   dayHeader: {
@@ -500,7 +594,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   dayTitle: {
-    fontSize: 16,
+    fontSize: theme.fontSizes.md,
     fontWeight: '600',
     color: theme.colors.text.primary,
   },
@@ -524,7 +618,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eventTime: {
-    fontSize: 14,
+    fontSize: theme.fontSizes.sm,
     fontWeight: '600',
     color: theme.colors.primary,
   },
@@ -543,18 +637,18 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary + '20',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: theme.fontSizes.xs,
     fontWeight: '600',
     color: theme.colors.text.primary,
   },
   eventTitle: {
-    fontSize: 18,
+    fontSize: theme.fontSizes.lg,
     fontWeight: '600',
     color: theme.colors.text.primary,
     marginBottom: 6,
   },
   eventDescription: {
-    fontSize: 15,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.text.secondary,
     lineHeight: 22,
   },
@@ -565,7 +659,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   eventMeta: {
-    fontSize: 13,
+    fontSize: theme.fontSizes.xs,
     color: theme.colors.text.secondary,
     marginBottom: 4,
   },
@@ -575,14 +669,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: theme.fontSizes.lg,
     fontWeight: '600',
     color: theme.colors.text.primary,
     marginTop: 16,
   },
   emptyText: {
     marginTop: 6,
-    fontSize: 14,
+    fontSize: theme.fontSizes.sm,
     color: theme.colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -607,7 +701,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary + '10',
   },
   weekDayName: {
-    fontSize: 12,
+    fontSize: theme.fontSizes.xs,
     fontWeight: '600',
     color: theme.colors.text.secondary,
   },
@@ -616,7 +710,7 @@ const styles = StyleSheet.create({
   },
   weekDayNumber: {
     marginTop: 2,
-    fontSize: 16,
+    fontSize: theme.fontSizes.md,
     fontWeight: '700',
     color: theme.colors.text.primary,
   },

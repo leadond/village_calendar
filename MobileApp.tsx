@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -10,6 +10,9 @@ import { ConvexProvider, ConvexReactClient, Authenticated, Unauthenticated, Auth
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { useQuery } from 'convex/react';
 import { api } from './convex/_generated/api';
+import { initSentry, setSentryUser } from './config/sentry';
+import SentryErrorBoundary from './components/SentryErrorBoundary';
+import { trackScreenView } from './utils/analytics';
 
 import { theme } from './lib/theme';
 
@@ -37,6 +40,7 @@ interface Profile {
   villageId: string;
   villageName: string;
   villageCode: string;
+  email: string;
 }
 
 function LoadingScreen() {
@@ -182,6 +186,14 @@ function MainApp({ profile }: { profile: Profile }) {
 function AuthenticatedApp() {
   const profile = useQuery(api.profiles.getMyProfile as any, {});
 
+  useEffect(() => {
+    if (profile) {
+      setSentryUser(profile);
+    } else {
+      setSentryUser(null);
+    }
+  }, [profile]);
+
   if (profile === undefined) {
     return <LoadingStack />;
   }
@@ -208,16 +220,40 @@ const convex = new ConvexReactClient(
   process.env.EXPO_PUBLIC_CONVEX_URL || 'https://placeholder.convex.cloud'
 );
 
-export default function MobileApp() {
-  // Check if we're on web - ConvexAuthProvider doesn't work on web
-  const isWeb = Platform.OS === 'web';
+initSentry();
 
-  if (isWeb) {
-    // Web version - skip ConvexAuthProvider to avoid crash
-    return (
-      <ConvexProvider client={convex}>
-        <SafeAreaProvider style={styles.container}>
-          <NavigationContainer>
+const linking = {
+  prefixes: ['villagecalendar://'],
+  config: {
+    screens: {
+      Onboarding: 'invite/:code',
+    },
+  },
+};
+
+export default function MobileApp() {
+  const navigationRef = useRef<any>(null);
+  const routeNameRef = useRef<string | null>(null);
+
+  const handleStateChange = () => {
+    const previousRouteName = routeNameRef.current;
+    const currentRouteName = navigationRef.current?.getCurrentRoute()?.name;
+
+    if (previousRouteName !== currentRouteName) {
+      trackScreenView(currentRouteName);
+    }
+    routeNameRef.current = currentRouteName;
+  };
+
+  return (
+    <ConvexAuthProvider client={convex}>
+      <SafeAreaProvider style={styles.container}>
+        <SentryErrorBoundary>
+          <NavigationContainer
+            ref={navigationRef}
+            onStateChange={handleStateChange}
+            linking={linking}
+          >
             <AuthLoading>
               <LoadingStack />
             </AuthLoading>
@@ -230,28 +266,7 @@ export default function MobileApp() {
               <AuthenticatedApp />
             </Authenticated>
           </NavigationContainer>
-        </SafeAreaProvider>
-      </ConvexProvider>
-    );
-  }
-
-  // Native (iOS/Android) - full auth support
-  return (
-    <ConvexAuthProvider client={convex}>
-      <SafeAreaProvider style={styles.container}>
-        <NavigationContainer>
-          <AuthLoading>
-            <LoadingStack />
-          </AuthLoading>
-
-          <Unauthenticated>
-            <AuthStack />
-          </Unauthenticated>
-
-          <Authenticated>
-            <AuthenticatedApp />
-          </Authenticated>
-        </NavigationContainer>
+        </SentryErrorBoundary>
       </SafeAreaProvider>
     </ConvexAuthProvider>
   );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,28 +6,227 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { useNavigation } from '@react-navigation/native';
 import * as Calendar from 'expo-calendar';
+import { showSuccess, showError } from '../utils/notifications';
+import { triggerSuccessHaptic } from '../utils/haptics';
+import { trackRequestDeleted, trackRequestUnclaimed } from '../utils/analytics';
 
 import { theme } from '../lib/theme';
 import { Ionicons } from '@expo/vector-icons';
+import Skeleton from '../components/Skeleton';
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: theme.colors.text.primary,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
+  card: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  cardDate: {
+    fontSize: 16,
+    color: theme.colors.gray.dark,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusOpen: {
+    backgroundColor: theme.colors.status.openBackground,
+  },
+  statusClaimed: {
+    backgroundColor: theme.colors.status.claimedBackground,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statusTextOpen: {
+    color: theme.colors.status.open,
+  },
+  statusTextClaimed: {
+    color: theme.colors.status.claimed,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.text.primary,
+    marginBottom: 5,
+  },
+  cardDescription: {
+    fontSize: 16,
+    color: theme.colors.text.secondary,
+    marginBottom: 10,
+  },
+  helperInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: theme.colors.primaryLight,
+    padding: 8,
+    borderRadius: 8,
+  },
+  helperText: {
+    marginLeft: 8,
+    fontSize: 15,
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.errorLight,
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  deleteText: {
+    color: theme.colors.accent,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primaryExtraLight,
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  chatButtonText: {
+    color: theme.colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.gray.light,
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  cancelText: {
+    color: theme.colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    marginTop: 10,
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primaryExtraLight,
+    borderRadius: 8,
+    paddingVertical: 12,
+  },
+  actionButtonText: {
+    color: theme.colors.primary,
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: theme.colors.gray.medium,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: theme.colors.gray.medium,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+});
 
 interface Props {
   profile: {
     role: 'parent' | 'helper';
+    villageId: any;
   };
 }
 
+const MyItemSkeleton = () => (
+  <View style={styles.card}>
+    <View style={styles.cardHeader}>
+      <Skeleton width={150} height={20} />
+      <Skeleton width={80} height={24} />
+    </View>
+    <Skeleton width="100%" height={24} style={{ marginVertical: 6 }} />
+    <Skeleton width="80%" height={20} />
+    <View style={styles.helperInfo}>
+      <Skeleton width={120} height={20} />
+    </View>
+    <Skeleton width="100%" height={44} style={{ marginTop: 10 }} />
+  </View>
+);
+
 export default function MyItemsScreen({ profile }: Props) {
   const navigation = useNavigation<any>();
+  const [isMutating, setIsMutating] = useState<string | null>(null);
+
   const myRequests = useQuery(api.helpRequests.getMyRequests, profile.role === 'parent' ? {} : 'skip');
   const myClaims = useQuery(api.helpRequests.getMyClaims, profile.role === 'helper' ? {} : 'skip');
   const deleteRequest = useMutation(api.helpRequests.deleteRequest);
   const unclaimRequest = useMutation(api.helpRequests.unclaimRequest);
+
+  const isLoading = profile.role === 'parent' ? myRequests === undefined : myClaims === undefined;
 
   const handleDelete = (requestId: any) => {
     Alert.alert('Delete Request', 'Are you sure you want to delete this request?', [
@@ -36,10 +235,16 @@ export default function MyItemsScreen({ profile }: Props) {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
+          setIsMutating(requestId);
           try {
             await deleteRequest({ requestId });
+            trackRequestDeleted({ villageId: profile.villageId, requestId });
+            triggerSuccessHaptic();
+            showSuccess('Request deleted');
           } catch (error: any) {
-            Alert.alert('Error', error?.message || 'Failed to delete');
+            showError(error.message || 'Failed to delete');
+          } finally {
+            setIsMutating(null);
           }
         },
       },
@@ -53,10 +258,16 @@ export default function MyItemsScreen({ profile }: Props) {
         text: 'Cancel',
         style: 'destructive',
         onPress: async () => {
+          setIsMutating(requestId);
           try {
             await unclaimRequest({ requestId });
+            trackRequestUnclaimed({ villageId: profile.villageId, requestId });
+            triggerSuccessHaptic();
+            showSuccess('Commitment cancelled');
           } catch (error: any) {
-            Alert.alert('Error', error?.message || 'Failed to unclaim');
+            showError(error.message || 'Failed to unclaim');
+          } finally {
+            setIsMutating(null);
           }
         },
       },
@@ -121,10 +332,10 @@ export default function MyItemsScreen({ profile }: Props) {
         alarms: [{ relativeOffset: -30 }],
       });
 
-      Alert.alert('Added!', 'Event added to your calendar with a 30-minute reminder.');
+      showSuccess('Event added to your calendar!');
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Error', 'Could not add to calendar.');
+      showError('Could not add to calendar.');
     }
   };
 
@@ -136,9 +347,21 @@ export default function MyItemsScreen({ profile }: Props) {
   const renderParentItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardDate}>{formatDate(item.date)} at {item.time}</Text>
-        <View style={[styles.statusBadge, item.status === 'open' ? styles.statusOpen : styles.statusClaimed]}>
-          <Text style={[styles.statusText, item.status === 'open' ? styles.statusTextOpen : styles.statusTextClaimed]}>
+        <Text style={styles.cardDate}>
+          {formatDate(item.date)} at {item.time}
+        </Text>
+        <View
+          style={[
+            styles.statusBadge,
+            item.status === 'open' ? styles.statusOpen : styles.statusClaimed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusText,
+              item.status === 'open' ? styles.statusTextOpen : styles.statusTextClaimed,
+            ]}
+          >
             {item.status === 'open' ? 'Open' : 'Claimed'}
           </Text>
         </View>
@@ -155,14 +378,31 @@ export default function MyItemsScreen({ profile }: Props) {
       )}
 
       {item.status === 'open' && (
-        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item.id)}>
-          <Ionicons name="trash-outline" size={18} color={theme.colors.accent} />
-          <Text style={styles.deleteText}>Delete</Text>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDelete(item.id)}
+          disabled={isMutating === item.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete request titled ${item.title}`}
+        >
+          {isMutating === item.id ? (
+            <ActivityIndicator color={theme.colors.accent} />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={18} color={theme.colors.accent} />
+              <Text style={styles.deleteText}>Delete</Text>
+            </>
+          )}
         </TouchableOpacity>
       )}
 
       {item.status === 'claimed' && (
-        <TouchableOpacity style={styles.chatButton} onPress={() => openChat(item, false)}>
+        <TouchableOpacity
+          style={styles.chatButton}
+          onPress={() => openChat(item, false)}
+          accessibilityRole="button"
+          accessibilityLabel={`Message helper for request titled ${item.title}`}
+        >
           <Ionicons name="chatbubble-outline" size={18} color={theme.colors.primary} />
           <Text style={styles.chatButtonText}>Message Helper</Text>
         </TouchableOpacity>
@@ -173,7 +413,9 @@ export default function MyItemsScreen({ profile }: Props) {
   const renderHelperItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardDate}>{formatDate(item.date)} at {item.time}</Text>
+        <Text style={styles.cardDate}>
+          {formatDate(item.date)} at {item.time}
+        </Text>
         <View style={[styles.statusBadge, styles.statusClaimed]}>
           <Text style={[styles.statusText, styles.statusTextClaimed]}>Committed</Text>
         </View>
@@ -187,18 +429,38 @@ export default function MyItemsScreen({ profile }: Props) {
         <Text style={styles.helperText}>Helping {item.createdByName}</Text>
       </View>
 
-      <TouchableOpacity style={styles.cancelButton} onPress={() => handleUnclaim(item.id)}>
-        <Text style={styles.cancelText}>I can no longer help</Text>
+      <TouchableOpacity
+        style={styles.cancelButton}
+        onPress={() => handleUnclaim(item.id)}
+        disabled={isMutating === item.id}
+        accessibilityRole="button"
+        accessibilityLabel={`Cancel commitment for request titled ${item.title}`}
+      >
+        {isMutating === item.id ? (
+          <ActivityIndicator color={theme.colors.text.secondary} />
+        ) : (
+          <Text style={styles.cancelText}>I can no longer help</Text>
+        )}
       </TouchableOpacity>
 
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => openChat(item, true)}>
-          <Ionicons name="chatbubble-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Message</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={() => handleAddToCalendar(item)}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleAddToCalendar(item)}
+          accessibilityRole="button"
+          accessibilityLabel={`Add request titled ${item.title} to your calendar`}
+        >
           <Ionicons name="calendar-outline" size={18} color={theme.colors.primary} />
           <Text style={styles.actionButtonText}>Add to Calendar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => openChat(item, true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Message about request titled ${item.title}`}
+        >
+          <Ionicons name="chatbubble-outline" size={18} color={theme.colors.primary} />
+          <Text style={styles.actionButtonText}>Message</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -215,196 +477,55 @@ export default function MyItemsScreen({ profile }: Props) {
         </Text>
       </View>
 
-      <FlatList
-        data={data || []}
-        renderItem={profile.role === 'parent' ? renderParentItem : renderHelperItem}
-        keyExtractor={(item: any) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons
-              name={profile.role === 'parent' ? 'document-text-outline' : 'hand-left-outline'}
-              size={64}
-              color={theme.colors.gray.medium}
-            />
-            <Text style={styles.emptyTitle}>
-              {profile.role === 'parent' ? 'No requests yet' : 'No commitments yet'}
-            </Text>
-            <Text style={styles.emptyText}>
-              {profile.role === 'parent'
-                ? 'Create a help request to get started'
-                : 'Browse open requests and volunteer to help'}
-            </Text>
-          </View>
-        }
-      />
+      {isLoading ? (
+        <FlatList
+          data={[1, 2, 3]}
+          renderItem={() => <MyItemSkeleton />}
+          keyExtractor={(item) => `skeleton-${item}`}
+          contentContainerStyle={styles.listContent}
+          getItemLayout={(data, index) => ({
+            length: 230,
+            offset: 230 * index,
+            index,
+          })}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+        />
+      ) : (
+        <FlatList
+          data={data || []}
+          renderItem={profile.role === 'parent' ? renderParentItem : renderHelperItem}
+          keyExtractor={(item: any) => `item-${item.id}`}
+          contentContainerStyle={styles.listContent}
+          getItemLayout={(data, index) => ({
+            length: 230,
+            offset: 230 * index,
+            index,
+          })}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons
+                name={profile.role === 'parent' ? 'document-text-outline' : 'hand-left-outline'}
+                size={64}
+                color={theme.colors.gray.medium}
+              />
+              <Text style={styles.emptyTitle}>
+                {profile.role === 'parent' ? 'No requests yet' : 'No commitments yet'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {profile.role === 'parent'
+                  ? 'Create a help request to get started'
+                  : 'Browse open requests and volunteer to help'}
+              </Text>
+            </View>
+          }
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={5}
+        />
+      )}
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  header: {
-    padding: 20,
-    paddingBottom: 16,
-    backgroundColor: theme.colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.gray.light,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: theme.colors.text.primary,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  card: {
-    backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardDate: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: '500',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusOpen: {
-    backgroundColor: theme.colors.accent + '20',
-  },
-  statusClaimed: {
-    backgroundColor: theme.colors.status.claimed + '20',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  statusTextOpen: {
-    color: theme.colors.accent,
-  },
-  statusTextClaimed: {
-    color: theme.colors.status.claimed,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    marginBottom: 6,
-  },
-  cardDescription: {
-    fontSize: 15,
-    color: theme.colors.text.secondary,
-    lineHeight: 22,
-  },
-  helperInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
-  },
-  helperText: {
-    fontSize: 14,
-    color: theme.colors.status.claimed,
-    fontWeight: '500',
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.gray.light,
-    gap: 6,
-  },
-  deleteText: {
-    fontSize: 14,
-    color: theme.colors.accent,
-    fontWeight: '500',
-  },
-  cancelButton: {
-    alignItems: 'center',
-    marginTop: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.gray.light,
-  },
-  cancelText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-  },
-  chatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.primary + '15',
-    borderRadius: 12,
-    height: 44,
-    marginTop: 10,
-    gap: 8,
-  },
-  chatButtonText: {
-    color: theme.colors.primary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.primary + '15',
-    borderRadius: 12,
-    height: 44,
-    gap: 6,
-  },
-  actionButtonText: {
-    color: theme.colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    marginTop: 16,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: theme.colors.text.secondary,
-    textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 32,
-    lineHeight: 22,
-  },
-});
