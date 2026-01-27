@@ -103,10 +103,51 @@ export const getVillageMembers = query({
       .withIndex("by_villageId", (q: any) => q.eq("villageId", args.villageId))
       .collect();
 
-    return profiles.map((p: any) => ({
-      id: p._id,
-      name: p.name,
-      role: p.role,
-    }));
+    return profiles
+      .filter((p: any) => p.status !== "pending" && p.status !== "rejected") // Only show active members
+      .map((p: any) => ({
+        id: p._id,
+        name: p.name,
+        role: p.role,
+      }));
   },
+});
+
+export const getPendingMembers = query({
+  args: { villageId: v.id("villages") },
+  returns: v.array(v.object({
+    id: v.id("profiles"),
+    name: v.string(),
+    role: v.string(),
+    email: v.optional(v.string())
+  })),
+  handler: async (ctx, args) => {
+    const profiles = await ctx.db
+      .query("profiles")
+      .withIndex("by_villageId", (q: any) => q.eq("villageId", args.villageId))
+      .collect();
+
+    return profiles
+      .filter((p: any) => p.status === "pending")
+      .map((p: any) => ({
+        id: p._id,
+        name: p.name,
+        role: p.role,
+        email: p.email,
+      }));
+  }
+});
+
+export const approveMember = mutation({
+  args: { profileId: v.id("profiles") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.profileId, { status: "active" });
+  }
+});
+
+export const rejectMember = mutation({
+  args: { profileId: v.id("profiles") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.profileId, { status: "rejected" });
+  }
 });

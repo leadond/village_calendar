@@ -8,6 +8,33 @@ import { assertAdmin } from "./adminAuth";
 // Run these from the Convex dashboard or create an admin screen.
 // For production: add role check to ensure only admins can call these.
 
+export const getVillageCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const villages = await ctx.db.query("villages").collect();
+    return villages.length;
+  },
+});
+
+export const getProfileCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const profiles = await ctx.db.query("profiles").collect();
+    return profiles.length;
+  },
+});
+
+export const getRequestCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const requests = await ctx.db.query("helpRequests").collect();
+    return requests.length;
+  },
+});
+
 export const getStats = query({
   args: {},
   returns: v.object({
@@ -21,7 +48,7 @@ export const getStats = query({
   }),
   handler: async (ctx) => {
     await assertAdmin(ctx);
-    
+
     const villages = await ctx.db.query("villages").collect();
     const profiles = await ctx.db.query("profiles").collect();
     const requests = await ctx.db.query("helpRequests").collect();
@@ -57,7 +84,7 @@ export const getAllVillages = query({
   ),
   handler: async (ctx) => {
     await assertAdmin(ctx);
-    
+
     const villages = await ctx.db.query("villages").order("desc").collect();
 
     const result = await Promise.all(
@@ -118,7 +145,7 @@ export const getVillageDetails = query({
   ),
   handler: async (ctx, args) => {
     await assertAdmin(ctx);
-    
+
     const village = await ctx.db.get(args.villageId);
     if (!village) return null;
 
@@ -182,18 +209,18 @@ export const getAllProfiles = query({
   ),
   handler: async (ctx) => {
     await assertAdmin(ctx);
-    
+
     const profiles = await ctx.db.query("profiles").order("desc").collect();
 
     const result = await Promise.all(
-      profiles.map(async (profile: any) => {
-        const village = await ctx.db.get(profile.villageId);
+      profiles.map(async (profile) => {
+        const village = profile.villageId ? await ctx.db.get(profile.villageId) : null;
         return {
           id: profile._id,
           name: profile.name,
           role: profile.role,
           userId: profile.userId,
-          villageName: village?.name ?? "Unknown",
+          villageName: (village as any)?.name ?? "Unknown",
           createdAt: profile._creationTime,
         };
       })
@@ -225,7 +252,7 @@ export const getActivityReport = query({
   }),
   handler: async (ctx, args) => {
     await assertAdmin(ctx);
-    
+
     const daysBack = args.daysBack ?? 7;
     const cutoff = Date.now() - daysBack * 24 * 60 * 60 * 1000;
 
@@ -236,23 +263,23 @@ export const getActivityReport = query({
     const recentRequests = requests.filter((r: any) => r._creationTime >= cutoff);
 
     const profilesWithVillage = await Promise.all(
-      recentProfiles.map(async (p: any) => {
-        const village = await ctx.db.get(p.villageId);
+      recentProfiles.map(async (p) => {
+        const village = p.villageId ? await ctx.db.get(p.villageId) : null;
         return {
           name: p.name,
           role: p.role,
-          villageName: village?.name ?? "Unknown",
+          villageName: (village as any)?.name ?? "Unknown",
           createdAt: p._creationTime,
         };
       })
     );
 
     const requestsWithVillage = await Promise.all(
-      recentRequests.map(async (r: any) => {
-        const village = await ctx.db.get(r.villageId);
+      recentRequests.map(async (r) => {
+        const village = r.villageId ? await ctx.db.get(r.villageId) : null;
         return {
           title: r.title,
-          villageName: village?.name ?? "Unknown",
+          villageName: (village as any)?.name ?? "Unknown",
           status: r.status,
           createdAt: r._creationTime,
         };
@@ -279,7 +306,7 @@ export const getEmptyVillages = query({
   ),
   handler: async (ctx) => {
     await assertAdmin(ctx);
-    
+
     const villages = await ctx.db.query("villages").collect();
 
     const empty = [];
@@ -317,7 +344,7 @@ export const getInactiveVillages = query({
   ),
   handler: async (ctx, args) => {
     await assertAdmin(ctx);
-    
+
     const daysInactive = args.daysInactive ?? 30;
     const cutoff = Date.now() - daysInactive * 24 * 60 * 60 * 1000;
 
@@ -379,5 +406,57 @@ export const deleteVillage = mutation({
 
     await ctx.db.delete(args.villageId);
     return null;
+  },
+});
+
+export const createTestUser = mutation({
+  args: {
+    name: v.string(),
+    email: v.optional(v.string()),
+    role: v.union(v.literal("parent"), v.literal("helper")),
+    villageId: v.optional(v.id("villages")),
+  },
+  returns: v.string(), // Returns ID of created profile
+  handler: async (ctx, args) => {
+    // 1. Verify Admin
+    await assertAdmin(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    // 2. Determine Village
+    let villageId = args.villageId;
+    if (!villageId) {
+      // Default to the admin's village if not specified
+      const adminProfile = await ctx.db
+        .query("profiles")
+        .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .first();
+
+      if (!adminProfile) throw new Error("Admin profile not found");
+      villageId = adminProfile.villageId;
+    }
+
+    // 3. Generate Mock/Pre-fill Data
+    const randomId = Math.random().toString(36).substring(7);
+    const mockToken = `test|${randomId}`;
+    const mockUserId = `user_test_${randomId}`; // Legacy ID format for compatibility
+
+    // 4. Create Profile
+    const profileId = await ctx.db.insert("profiles", {
+      name: args.name,
+      email: args.email, // If real, syncMyProfileIdentity will claim this later
+      role: args.role,
+      villageId: villageId!,
+      // Mock identity - will be overwritten if/when real user claims it via email match
+      tokenIdentifier: mockToken,
+      subject: mockToken,
+      issuer: "https://mock.verifier.com",
+      userId: mockUserId,
+      status: "active", // Auto-confirmed
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return profileId;
   },
 });

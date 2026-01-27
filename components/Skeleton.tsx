@@ -1,5 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, ViewStyle } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  Animated,
+  ViewStyle,
+  LayoutChangeEvent,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../lib/theme';
 
@@ -11,32 +17,42 @@ interface SkeletonProps {
 
 const Skeleton: React.FC<SkeletonProps> = ({ width, height, style }) => {
   const translateX = useRef(new Animated.Value(-1)).current;
+  const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.timing(translateX, {
-        toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
-      })
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [translateX]);
+    if (containerWidth > 0) {
+      const animation = Animated.loop(
+        Animated.timing(translateX, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        })
+      );
+      animation.start();
+      return () => animation.stop();
+    }
+  }, [translateX, containerWidth]);
+
+  const onLayout = (event: LayoutChangeEvent) => {
+    setContainerWidth(event.nativeEvent.layout.width);
+  };
 
   const animatedStyle = {
     transform: [
       {
         translateX: translateX.interpolate({
           inputRange: [-1, 1],
-          outputRange: [-Number(width), Number(width)],
+          outputRange: [-containerWidth, containerWidth],
         }),
       },
     ],
   };
 
   return (
-    <View style={[styles.container, { width, height }, style]}>
+    <View
+      style={[styles.container, { width, height }, style]}
+      onLayout={onLayout}
+    >
       <Animated.View style={[styles.gradient, animatedStyle]}>
         <LinearGradient
           colors={['transparent', 'rgba(255, 255, 255, 0.3)', 'transparent']}

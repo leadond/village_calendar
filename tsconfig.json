@@ -1,6 +1,13 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@convex-dev/auth/providers/*": ["./node_modules/@convex-dev/auth/dist/providers/*"]
+    }
   }
 }

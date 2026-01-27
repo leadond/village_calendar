@@ -63,7 +63,13 @@ export default function CreateEventScreen({ profile, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Close screen"
+          accessibilityHint="Return to the previous screen"
+          accessibilityRole="button"
+        >
           <Ionicons name={Platform.OS === 'ios' ? 'close' : 'arrow-back'} size={22} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New Event</Text>
@@ -78,6 +84,8 @@ export default function CreateEventScreen({ profile, navigation }: Props) {
           placeholderTextColor={theme.colors.gray.medium}
           value={title}
           onChangeText={setTitle}
+          accessibilityLabel="Event title"
+          accessibilityHint="Enter a title for the event"
         />
 
         <Text style={styles.label}>Description (optional)</Text>
@@ -88,6 +96,8 @@ export default function CreateEventScreen({ profile, navigation }: Props) {
           value={description}
           onChangeText={setDescription}
           multiline
+          accessibilityLabel="Event description"
+          accessibilityHint="Enter optional details about the event"
         />
 
         <Text style={styles.label}>Date</Text>
@@ -98,6 +108,8 @@ export default function CreateEventScreen({ profile, navigation }: Props) {
           value={date}
           onChangeText={setDate}
           autoCapitalize="none"
+          accessibilityLabel="Event date"
+          accessibilityHint="Enter the event date in YYYY-MM-DD format"
         />
 
         <Text style={styles.label}>Time</Text>
@@ -107,12 +119,17 @@ export default function CreateEventScreen({ profile, navigation }: Props) {
           placeholderTextColor={theme.colors.gray.medium}
           value={time}
           onChangeText={setTime}
+          accessibilityLabel="Event time"
+          accessibilityHint="Enter the event time"
         />
 
         <TouchableOpacity
           style={[styles.button, (saving || !title.trim()) && styles.buttonDisabled]}
           onPress={handleSave}
           disabled={saving}
+          accessibilityLabel="Create event"
+          accessibilityHint="Create the new village event"
+          accessibilityRole="button"
         >
           {saving ? <ActivityIndicator color={theme.colors.white} /> : <Text style={styles.buttonText}>Create Event</Text>}
         </TouchableOpacity>

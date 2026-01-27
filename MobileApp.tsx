@@ -1,18 +1,25 @@
+// Version: 1.0.2 - Production deployment (Fixed Profile Auth)
 import 'react-native-gesture-handler';
 import React, { useEffect, useRef } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import { createStackNavigator, StackScreenProps, StackNavigationProp } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, ActivityIndicator, View, TouchableOpacity, Platform } from 'react-native';
+import { StyleSheet, ActivityIndicator, View, TouchableOpacity, Platform, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ConvexProvider, ConvexReactClient, Authenticated, Unauthenticated, AuthLoading } from 'convex/react';
-import { ConvexAuthProvider } from '@convex-dev/auth/react';
-import { useQuery } from 'convex/react';
+import { ConvexReactClient, Authenticated, Unauthenticated, AuthLoading, useConvexAuth, ConvexProvider } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from './convex/_generated/api';
 import { initSentry, setSentryUser } from './config/sentry';
 import SentryErrorBoundary from './components/SentryErrorBoundary';
-import { trackScreenView } from './utils/analytics';
+import { trackScreenView, analytics } from './utils/analytics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getEnvConfig } from './config/env';
+import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
+import { ConvexProviderWithClerk } from 'convex/react-clerk';
+import { authCache } from './lib/auth-cache';
+import { useFonts } from 'expo-font';
+
 
 import { theme } from './lib/theme';
 
@@ -29,19 +36,10 @@ import ProfileScreen from './screens/ProfileScreen';
 import AdminScreen from './screens/AdminScreen';
 import ChatScreen from './screens/ChatScreen';
 
-const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator();
+import { RootStackParamList, Profile } from './types';
 
-interface Profile {
-  id: string;
-  userId: string;
-  name: string;
-  role: 'parent' | 'helper';
-  villageId: string;
-  villageName: string;
-  villageCode: string;
-  email: string;
-}
+const Stack = createStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator();
 
 function LoadingScreen() {
   return (
@@ -67,9 +65,15 @@ function OnboardingStack() {
   );
 }
 
-function MainTabs({ profile, navigation }: { profile: Profile; navigation: any }) {
+function MainTabs({
+  profile,
+  navigation,
+}: {
+  profile: Profile;
+  navigation: StackNavigationProp<RootStackParamList>;
+}) {
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.flex1}>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
@@ -144,8 +148,15 @@ function MainTabs({ profile, navigation }: { profile: Profile; navigation: any }
 
       {/* Floating Action Button for Parents */}
       {profile.role === 'parent' && (
-        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateRequest')}>
-          <Ionicons name="add" size={28} color={theme.colors.white} />
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => navigation.navigate('CreateRequest')}
+          accessibilityLabel="Create request"
+          accessibilityHint="Create a new help request"
+          accessibilityRole="button"
+        >
+          <Ionicons name="add" size={20} color={theme.colors.white} />
+          <Text style={styles.fabText}>Ask for Help</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -156,26 +167,30 @@ function MainApp({ profile }: { profile: Profile }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs">
-        {(props: any) => <MainTabs profile={profile} navigation={props.navigation} />}
+        {(props: StackScreenProps<RootStackParamList, 'MainTabs'>) => (
+          <MainTabs profile={profile} navigation={props.navigation} />
+        )}
       </Stack.Screen>
       <Stack.Screen name="CreateRequest" options={{ presentation: 'modal' }}>
-        {({ navigation }: { navigation: any }) => (
-          <CreateRequestScreen profile={profile} navigation={navigation} />
+        {({ navigation, route }: StackScreenProps<RootStackParamList, 'CreateRequest'>) => (
+          <CreateRequestScreen profile={profile} navigation={navigation} route={route} />
         )}
       </Stack.Screen>
 
       <Stack.Screen name="CreateEvent" options={{ presentation: 'modal' }}>
-        {({ navigation }: { navigation: any }) => (
+        {({ navigation }: StackScreenProps<RootStackParamList, 'CreateEvent'>) => (
           <CreateEventScreen profile={profile} navigation={navigation} />
         )}
       </Stack.Screen>
 
       <Stack.Screen name="Admin" options={{ presentation: 'card' }}>
-        {({ navigation }: { navigation: any }) => <AdminScreen navigation={navigation} />}
+        {({ navigation }: StackScreenProps<RootStackParamList, 'Admin'>) => (
+          <AdminScreen navigation={navigation} />
+        )}
       </Stack.Screen>
 
       <Stack.Screen name="Chat" options={{ presentation: 'card' }}>
-        {({ route, navigation }: { route: any; navigation: any }) => (
+        {({ route, navigation }: StackScreenProps<RootStackParamList, 'Chat'>) => (
           <ChatScreen route={route} navigation={navigation} />
         )}
       </Stack.Screen>
@@ -184,13 +199,28 @@ function MainApp({ profile }: { profile: Profile }) {
 }
 
 function AuthenticatedApp() {
-  const profile = useQuery(api.profiles.getMyProfile as any, {});
+  console.log("[AuthenticatedApp] Mounting...");
+  const profile = useQuery(api.profiles.getMyProfile, {});
+  const sync = useMutation(api.profiles.syncMyProfileIdentity);
+
+  useEffect(() => {
+    console.log("[AuthenticatedApp] Running initial syncMyProfileIdentity");
+    sync({}).then((res) => {
+      console.log("[AuthenticatedApp] Sync result:", res ? "Profile synced" : "No profile found");
+    }).catch((err) => {
+      console.error('[AuthenticatedApp] Failed to sync identity:', err);
+    });
+  }, [sync]);
 
   useEffect(() => {
     if (profile) {
+      console.log("[AuthenticatedApp] Profile loaded:", profile.id);
       setSentryUser(profile);
-    } else {
+    } else if (profile === null) {
+      console.log("[AuthenticatedApp] No profile found (null)");
       setSentryUser(null);
+    } else {
+      console.log("[AuthenticatedApp] Profile is still undefined (loading)");
     }
   }, [profile]);
 
@@ -214,16 +244,15 @@ function AuthStack() {
   );
 }
 
-// Initialize Convex client
-// TODO: Replace with your actual Convex deployment URL from environment variable
-const convex = new ConvexReactClient(
-  process.env.EXPO_PUBLIC_CONVEX_URL || 'https://placeholder.convex.cloud'
-);
+// Initialize Convex client using validated environment configuration.
+const { convexUrl, clerkPublishableKey } = getEnvConfig();
+const PUBLISHABLE_KEY = clerkPublishableKey;
+const convex = new ConvexReactClient(convexUrl);
 
 initSentry();
 
 const linking = {
-  prefixes: ['villagecalendar://'],
+  prefixes: ['villagecalendar://', Platform.OS === 'web' ? window.location.origin : ' '],
   config: {
     screens: {
       Onboarding: 'invite/:code',
@@ -231,9 +260,48 @@ const linking = {
   },
 };
 
+function WebViewport({ children }: { children: React.ReactNode }) {
+  if (Platform.OS !== 'web') return <>{children}</>;
+
+  return (
+    <View style={styles.webOuterContainer}>
+      <View style={styles.webInternalContainer}>{children}</View>
+    </View>
+  );
+}
+
+
+function AuthGate() {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { isLoaded: isClerkLoaded, isSignedIn } = useAuth();
+
+  useEffect(() => {
+    console.log("[AuthGate] Clerk Loaded:", isClerkLoaded, "Convex Loading:", isLoading, "Authenticated:", isAuthenticated);
+  }, [isClerkLoaded, isLoading, isAuthenticated]);
+
+  if (!isClerkLoaded || isLoading) {
+    return <LoadingStack />;
+  }
+
+  if (!isAuthenticated && !isSignedIn) {
+    return <AuthStack />;
+  }
+
+  return <AuthenticatedApp />;
+}
+
 export default function MobileApp() {
-  const navigationRef = useRef<any>(null);
+  const navigationRef = useRef<NavigationContainerRef<RootStackParamList> | null>(null);
   const routeNameRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    console.log("[MobileApp] App mounted. Platform:", Platform.OS);
+  }, []);
+
+  // Load Ionicons in background - don't block app rendering
+  const [fontsLoaded] = useFonts({
+    ...Ionicons.font,
+  });
 
   const handleStateChange = () => {
     const previousRouteName = routeNameRef.current;
@@ -245,35 +313,44 @@ export default function MobileApp() {
     routeNameRef.current = currentRouteName;
   };
 
+  // Web-only: suppress noisy unhandled rejections that bypass try/catch
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handler = (event: PromiseRejectionEvent) => {
+        event.preventDefault();
+        console.warn('Suppressed unhandled rejection:', event.reason);
+      };
+      window.addEventListener('unhandledrejection', handler);
+      return () => window.removeEventListener('unhandledrejection', handler);
+    }
+  }, []);
+
   return (
-    <ConvexAuthProvider client={convex}>
-      <SafeAreaProvider style={styles.container}>
-        <SentryErrorBoundary>
-          <NavigationContainer
-            ref={navigationRef}
-            onStateChange={handleStateChange}
-            linking={linking}
-          >
-            <AuthLoading>
-              <LoadingStack />
-            </AuthLoading>
-
-            <Unauthenticated>
-              <AuthStack />
-            </Unauthenticated>
-
-            <Authenticated>
-              <AuthenticatedApp />
-            </Authenticated>
-          </NavigationContainer>
-        </SentryErrorBoundary>
-      </SafeAreaProvider>
-    </ConvexAuthProvider>
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY} tokenCache={authCache}>
+      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+        <SafeAreaProvider style={styles.container}>
+          <SentryErrorBoundary>
+            <WebViewport>
+              <NavigationContainer
+                ref={navigationRef}
+                onStateChange={handleStateChange}
+                linking={linking}
+              >
+                <AuthGate />
+              </NavigationContainer>
+            </WebViewport>
+          </SentryErrorBoundary>
+        </SafeAreaProvider>
+      </ConvexProviderWithClerk>
+    </ClerkProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  flex1: {
     flex: 1,
   },
   loadingContainer: {
@@ -282,14 +359,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.background,
   },
+  webOuterContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A', // High-contrast professional slate
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webInternalContainer: {
+    width: '100%',
+    maxWidth: 1200, // Standard professional desktop dashboard width
+    height: '100%',
+    backgroundColor: theme.colors.background,
+    // Add a professional shadow instead of a bezel
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 3,
+    overflow: 'hidden',
+    borderWidth: Platform.OS === 'web' ? 1 : 0,
+    borderColor: '#E2E8F0',
+  },
   fab: {
     position: 'absolute',
     bottom: 100,
     right: 20,
-    width: 56,
     height: 56,
+    paddingHorizontal: 24,
     borderRadius: 28,
     backgroundColor: theme.colors.primary,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -297,5 +396,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    gap: 8,
+  },
+  fabText: {
+    color: theme.colors.white,
+    fontSize: theme.fontSizes.md,
+    fontWeight: '600',
   },
 });

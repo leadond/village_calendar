@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "scheme": "villagecalendar",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.villagecalendar.app",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCalendarsUsageDescription": "This app needs access to your calendar to help coordinate childcare events.",
@@ -28,17 +29,35 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.villagecalendar.app"
+      "package": "com.villagecalendar.app",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "description": "A mobile app for community childcare coordination. Parents post help requests, helpers volunteer to assist.",
-    "privacy": "https://your-website.com/privacy-policy",
+    "description": "A community-driven calendar for villages to share events and resources. Parents post help requests, helpers volunteer to assist, and everyone stays connected through shared calendars and real-time messaging.",
+    "privacy": "public",
+    "updates": {
+      "url": "https://u.expo.dev/8a926f6e-f3c2-4eed-be58-4df3a97c04c7"
+    },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

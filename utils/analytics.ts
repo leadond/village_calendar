@@ -5,6 +5,7 @@
 type EventName =
   | 'user_signup'
   | 'user_login'
+  | 'user_logout'
   | 'request_created'
   | 'request_claimed'
   | 'request_deleted'
@@ -70,4 +71,27 @@ export const trackVillageCreated = (properties: { villageId: string }) => {
 
 export const trackInviteSent = (properties: { villageId: string; inviteCode: string }) => {
   logEvent('invite_sent', properties);
+};
+
+export const trackUserLogout = () => {
+  logEvent('user_logout');
+};
+
+// Export an analytics object for convenience
+export const analytics = {
+  track: (eventName: EventName, properties?: EventProperties) => {
+    logEvent(eventName, properties);
+  },
+  trackScreenView,
+  trackUserSignup,
+  trackUserLogin,
+  trackUserLogout,
+  trackRequestCreated,
+  trackRequestClaimed,
+  trackRequestDeleted,
+  trackRequestUnclaimed,
+  trackEventCreated,
+  trackVillageJoined,
+  trackVillageCreated,
+  trackInviteSent,
 };

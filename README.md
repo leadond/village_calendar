@@ -29,6 +29,7 @@ A mobile app for community childcare coordination. Parents post help requests, h
 - **Backend**: Convex (real-time database)
 - **Auth**: Convex Auth (email/password)
 - **UI**: Custom components with theme system
+- **Data Policy**: Client reads/writes go through Convex; no third-party API keys in the app bundle
 
 ## Screens
 
@@ -59,7 +60,7 @@ A mobile app for community childcare coordination. Parents post help requests, h
 ## Future Enhancements
 
 - Push notifications when requests are claimed
-- Calendar integration with Nylas API
+- Calendar integration with device calendars
 - In-app messaging between parents and helpers
 - Recurring help requests
 - Village admin roles

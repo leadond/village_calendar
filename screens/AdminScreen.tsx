@@ -34,6 +34,31 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
     return map;
   }, [users]);
 
+  const [testUserName, setTestUserName] = useState('');
+  const [testUserEmail, setTestUserEmail] = useState('');
+  const [testUserRole, setTestUserRole] = useState<'parent' | 'helper'>('helper');
+  const [isCreating, setIsCreating] = useState(false);
+  const createTestUser = useMutation(api.admin.createTestUser);
+
+  const handleCreateTestUser = async () => {
+    if (!testUserName.trim()) return;
+    setIsCreating(true);
+    try {
+      await createTestUser({
+        name: testUserName,
+        email: testUserEmail || undefined,
+        role: testUserRole,
+      });
+      setTestUserName('');
+      setTestUserEmail('');
+      Alert.alert('Success', 'User created! They are confirmed and ready.');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to create user');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const handleAddAdmin = async () => {
     const trimmed = userId.trim();
     if (!trimmed) return;
@@ -75,7 +100,13 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Go back to previous screen"
+          accessibilityHint="Navigate back to the previous screen"
+          accessibilityRole="button"
+        >
           <Ionicons name="chevron-back" size={22} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Admin</Text>
@@ -135,6 +166,9 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
                         <TouchableOpacity
                           style={styles.iconBtn}
                           onPress={() => handleRemoveAdmin(a.id, a.role)}
+                          accessibilityLabel="Remove admin"
+                          accessibilityHint="Remove this admin user"
+                          accessibilityRole="button"
                         >
                           <Ionicons name="trash-outline" size={18} color={theme.colors.accent} />
                         </TouchableOpacity>
@@ -152,11 +186,16 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
                       placeholder="User ID (identity.subject)"
                       placeholderTextColor={theme.colors.gray.medium}
                       autoCapitalize="none"
+                      accessibilityLabel="User ID input"
+                      accessibilityHint="Enter the user ID to add as admin"
                     />
                     <TouchableOpacity
                       style={[styles.addBtn, !userId.trim() && styles.addBtnDisabled]}
                       disabled={!userId.trim()}
                       onPress={handleAddAdmin}
+                      accessibilityLabel="Add admin"
+                      accessibilityHint="Add the specified user as an admin"
+                      accessibilityRole="button"
                     >
                       <Text style={styles.addBtnText}>Add</Text>
                     </TouchableOpacity>
@@ -170,6 +209,44 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
             ) : (
               <Text style={styles.noteText}>No admins found.</Text>
             )}
+
+            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Create Confirmed User</Text>
+            <View style={styles.card}>
+              <TextInput
+                style={[styles.input, { marginBottom: 12 }]}
+                placeholder="Full Name"
+                value={testUserName}
+                onChangeText={setTestUserName}
+              />
+              <TextInput
+                style={[styles.input, { marginBottom: 12 }]}
+                placeholder="Email (optional, for auto-link)"
+                value={testUserEmail}
+                onChangeText={setTestUserEmail}
+                autoCapitalize="none"
+              />
+              <View style={styles.roleSelector}>
+                <TouchableOpacity
+                  style={[styles.roleOption, testUserRole === 'parent' && styles.roleOptionSelected]}
+                  onPress={() => setTestUserRole('parent')}
+                >
+                  <Text style={[styles.roleOptionText, testUserRole === 'parent' && styles.roleOptionTextSelected]}>Parent</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.roleOption, testUserRole === 'helper' && styles.roleOptionSelected]}
+                  onPress={() => setTestUserRole('helper')}
+                >
+                  <Text style={[styles.roleOptionText, testUserRole === 'helper' && styles.roleOptionTextSelected]}>Helper</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={[styles.createBtn, (!testUserName.trim()) && styles.disabledBtn]}
+                disabled={!testUserName.trim()}
+                onPress={handleCreateTestUser}
+              >
+                {isCreating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Create User</Text>}
+              </TouchableOpacity>
+            </View>
 
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Users</Text>
 
@@ -207,6 +284,7 @@ export default function AdminScreen({ navigation }: { navigation: any }) {
         maxToRenderPerBatch={3}
         windowSize={5}
         initialNumToRender={1}
+        legacyImplementation={false}
       />
     </SafeAreaView>
   );
@@ -368,5 +446,43 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     color: theme.colors.text.secondary,
+  },
+  roleSelector: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 8,
+  },
+  roleOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.gray.light,
+    alignItems: 'center',
+  },
+  roleOptionSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  roleOptionText: {
+    color: theme.colors.text.secondary,
+    fontWeight: '600',
+  },
+  roleOptionTextSelected: {
+    color: theme.colors.white,
+  },
+  createBtn: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  createBtnText: {
+    color: theme.colors.white,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  disabledBtn: {
+    opacity: 0.5,
   },
 });

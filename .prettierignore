@@ -1,0 +1,48 @@
+# Dependencies
+node_modules
+package-lock.json
+
+# Build outputs
+.expo
+dist
+build
+.next
+out
+
+# Expo
+.expo-shared
+.web-cache
+
+# Generated files
+convex/_generated
+.snapshots
+.zencoder
+.zenflow
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+._*
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage
+.nyc_output
+
+# Misc
+.cache
+.vscode
+.idea
+*.swp
+*.swo
+*~

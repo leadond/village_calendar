@@ -1,0 +1,175 @@
+(node:15369) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/derrickleadon/Downloads/VillageCalendar/eslint.config.js?mtime=1769353422948 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/derrickleadon/Downloads/VillageCalendar/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/admin.ts
+   56:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   57:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   58:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   94:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   99:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  154:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  159:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  162:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  173:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  216:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  260:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  263:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  266:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  316:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  357:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  362:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  392:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  394:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  401:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  403:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/adminAuth.ts
+    6:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   12:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   18:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   24:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   83:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   86:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  117:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  157:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  186:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/events.ts
+  19:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  23:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  27:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/helpRequests.ts
+   25:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   33:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   70:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  183:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  219:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  223:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  227:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/invites.ts
+  25:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  45:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  74:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  96:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/messages.ts
+  31:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  35:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  69:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  91:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/profiles.ts
+   25:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   95:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/convex/villages.ts
+   24:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   31:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   57:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  103:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/AdminScreen.tsx
+   19:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   33:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   45:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   66:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   88:22  warning  Inline style: { width: 40 }               react-native/no-inline-styles
+   93:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:48  warning  Inline style: { marginTop: 24 }           react-native/no-inline-styles
+  127:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:36  warning  Inline style: { flex: 1 }                 react-native/no-inline-styles
+  188:48  warning  Inline style: { marginTop: 24 }           react-native/no-inline-styles
+  196:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  198:34  warning  Inline style: { flex: 1 }                 react-native/no-inline-styles
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/CreateEventScreen.tsx
+  23:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  25:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  56:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:22  warning  Inline style: { width: 40 }               react-native/no-inline-styles
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/CreateRequestScreen.tsx
+   11:3   warning  'Platform' is defined but never used      @typescript-eslint/no-unused-vars
+   24:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   26:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   72:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:22  warning  Inline style: { width: 44 }               react-native/no-inline-styles
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/HomeScreen.tsx
+   28:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:47  warning  Inline style: { marginBottom: 6 }         react-native/no-inline-styles
+   44:47  warning  Inline style: { marginTop: 12 }           react-native/no-inline-styles
+   49:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   86:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  158:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  159:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  218:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/LoginScreen.tsx
+  19:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  37:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/MyItemsScreen.tsx
+  202:16  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  212:47  warning  Inline style: { marginVertical: 6 }           react-native/no-inline-styles
+  217:47  warning  Inline style: { marginTop: 10 }               react-native/no-inline-styles
+  222:36  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  232:36  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  245:27  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  255:37  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  268:27  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  278:27  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  289:44  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  325:17  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  334:38  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  335:38  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  347:23  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  373:47  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  439:47  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  496:9   warning  'isEmpty' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  527:32  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/OnboardingScreen.tsx
+  73:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  99:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/ProfileScreen.tsx
+  22:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  26:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  52:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  87:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  96:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  97:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/screens/SignupScreen.tsx
+  15:10  warning  'useMutation' is defined but never used   @typescript-eslint/no-unused-vars
+  22:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  58:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/derrickleadon/Downloads/VillageCalendar/utils/analytics.ts
+  19:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 132 problems (0 errors, 132 warnings)
+

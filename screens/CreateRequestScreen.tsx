@@ -26,13 +26,17 @@ interface Props {
   navigation: any;
 }
 
-export default function CreateRequestScreen({ profile, navigation }: Props) {
+export default function CreateRequestScreen({ profile, navigation, route }: Props & { route: any }) {
   const createRequest = useMutation(api.helpRequests.createRequest);
+  const updateRequest = useMutation(api.helpRequests.updateRequest);
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const editingRequest = route?.params?.request;
+  const isEditing = !!editingRequest;
+
+  const [title, setTitle] = useState(editingRequest?.title || '');
+  const [description, setDescription] = useState(editingRequest?.description || '');
+  const [date, setDate] = useState(editingRequest?.date || '');
+  const [time, setTime] = useState(editingRequest?.time || '');
   const [saving, setSaving] = useState(false);
 
   // Simple date picker using text input with format hint
@@ -58,19 +62,31 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
 
     setSaving(true);
     try {
-      const requestId = await createRequest({
-        villageId: profile.villageId,
-        title: title.trim(),
-        description: description.trim(),
-        date,
-        time,
-      });
-      trackRequestCreated({ villageId: profile.villageId, requestId });
-      triggerSuccessHaptic();
-      showSuccess('Your help request has been posted!');
+      if (isEditing) {
+        await updateRequest({
+          requestId: editingRequest.id,
+          title: title.trim(),
+          description: description.trim(),
+          date,
+          time,
+        });
+        triggerSuccessHaptic();
+        showSuccess('Request updated!');
+      } else {
+        const requestId = await createRequest({
+          villageId: profile.villageId,
+          title: title.trim(),
+          description: description.trim(),
+          date,
+          time,
+        });
+        trackRequestCreated({ villageId: profile.villageId, requestId });
+        triggerSuccessHaptic();
+        showSuccess('Your help request has been posted!');
+      }
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to create request');
+      Alert.alert('Error', error?.message || 'Failed to save request');
       setSaving(false);
     }
   };
@@ -96,10 +112,16 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.closeButton}
+          accessibilityLabel="Close screen"
+          accessibilityHint="Return to the previous screen"
+          accessibilityRole="button"
+        >
           <Ionicons name="close" size={28} color={theme.colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Request</Text>
+        <Text style={styles.headerTitle}>{isEditing ? 'Edit Request' : 'New Request'}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -111,6 +133,8 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
           value={title}
           onChangeText={setTitle}
           placeholderTextColor={theme.colors.gray.medium}
+          accessibilityLabel="Request title"
+          accessibilityHint="Enter a brief title for your help request"
         />
 
         <Text style={styles.label}>Details</Text>
@@ -123,6 +147,8 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
           numberOfLines={4}
           textAlignVertical="top"
           placeholderTextColor={theme.colors.gray.medium}
+          accessibilityLabel="Request details"
+          accessibilityHint="Provide detailed description of what help you need"
         />
 
         <Text style={styles.label}>When do you need help?</Text>
@@ -132,6 +158,9 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
               key={d.value}
               style={[styles.quickButton, date === d.value && styles.quickButtonSelected]}
               onPress={() => setDate(d.value)}
+              accessibilityLabel={`Select ${d.label}`}
+              accessibilityHint={`Set date to ${d.label}`}
+              accessibilityRole="button"
             >
               <Text style={[styles.quickButtonText, date === d.value && styles.quickButtonTextSelected]}>
                 {d.label}
@@ -155,6 +184,9 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
               key={t}
               style={[styles.quickButton, time === t && styles.quickButtonSelected]}
               onPress={() => setTime(t)}
+              accessibilityLabel={`Select time ${t}`}
+              accessibilityHint={`Set time to ${t}`}
+              accessibilityRole="button"
             >
               <Text style={[styles.quickButtonText, time === t && styles.quickButtonTextSelected]}>
                 {t}
@@ -175,13 +207,16 @@ export default function CreateRequestScreen({ profile, navigation }: Props) {
           style={[styles.submitButton, saving && styles.submitButtonDisabled]}
           onPress={handleCreate}
           disabled={saving}
+          accessibilityLabel={isEditing ? "Save changes" : "Post request"}
+          accessibilityHint="Submit your changes"
+          accessibilityRole="button"
         >
           {saving ? (
             <ActivityIndicator color={theme.colors.white} />
           ) : (
             <>
-              <Ionicons name="paper-plane" size={20} color={theme.colors.white} />
-              <Text style={styles.submitButtonText}>Post Request</Text>
+              <Ionicons name={isEditing ? "save-outline" : "paper-plane"} size={20} color={theme.colors.white} />
+              <Text style={styles.submitButtonText}>{isEditing ? 'Save Changes' : 'Post Request'}</Text>
             </>
           )}
         </TouchableOpacity>

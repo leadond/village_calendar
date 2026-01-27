@@ -1,25 +1,56 @@
 import * as Haptics from 'expo-haptics';
+import { Platform } from 'react-native';
+
+const triggerVibrate = (pattern: number | number[]) => {
+  if (Platform.OS === 'web' && 'vibrate' in navigator) {
+    navigator.vibrate(pattern);
+  }
+};
 
 export const triggerSuccessHaptic = () => {
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  if (Platform.OS === 'web') {
+    triggerVibrate(200);
+  } else {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }
 };
 
 export const triggerWarningHaptic = () => {
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  if (Platform.OS === 'web') {
+    triggerVibrate([100, 50, 100]);
+  } else {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }
 };
 
 export const triggerErrorHaptic = () => {
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  if (Platform.OS === 'web') {
+    triggerVibrate([200, 100, 200]);
+  } else {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  }
 };
 
 export const triggerLightImpact = () => {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  if (Platform.OS === 'web') {
+    triggerVibrate(50);
+  } else {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
 };
 
 export const triggerMediumImpact = () => {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  if (Platform.OS === 'web') {
+    triggerVibrate(100);
+  } else {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
 };
 
 export const triggerHeavyImpact = () => {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  if (Platform.OS === 'web') {
+    triggerVibrate(150);
+  } else {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }
 };

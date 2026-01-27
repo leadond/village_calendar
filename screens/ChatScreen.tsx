@@ -18,10 +18,15 @@ import { theme } from '../lib/theme';
 import * as Calendar from 'expo-calendar';
 import { triggerLightImpact } from '../utils/haptics';
 
+import { Id } from '../convex/_generated/dataModel';
+import { RootStackParamList, Message } from '../types';
+import { StackNavigationProp } from '@react-navigation/stack';
+import Avatar from '../components/Avatar';
+
 interface Props {
   route: {
     params: {
-      requestId: any;
+      requestId: Id<'helpRequests'>;
       requestTitle: string;
       requestDate: string;
       requestTime: string;
@@ -29,8 +34,10 @@ interface Props {
       isHelper: boolean;
     };
   };
-  navigation: any;
+  navigation: StackNavigationProp<RootStackParamList>;
 }
+
+type MessageWithIsMe = Message & { isMe: boolean; senderName: string };
 
 export default function ChatScreen({ route, navigation }: Props) {
   const { requestId, requestTitle, requestDate, requestTime, requestDescription, isHelper } = route.params;
@@ -39,7 +46,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const flatListRef = useRef<FlatList<any>>(null);
+  const flatListRef = useRef<FlatList<MessageWithIsMe>>(null);
 
   useEffect(() => {
     if (messages && messages.length > 0) {
@@ -57,8 +64,9 @@ export default function ChatScreen({ route, navigation }: Props) {
       await sendMessage({ requestId, text: text.trim() });
       setText('');
       triggerLightImpact();
-    } catch (error: any) {
-      Alert.alert('Error', error?.message ?? 'Failed to send');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to send';
+      Alert.alert('Error', message);
     } finally {
       setSending(false);
     }
@@ -74,7 +82,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
       const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
       const writableCalendars = calendars.filter(
-        (cal: any) => cal.allowsModifications && cal.source.name !== 'Birthdays'
+        (cal: Calendar.Calendar) => cal.allowsModifications && cal.source.name !== 'Birthdays'
       );
 
       if (writableCalendars.length === 0) {
@@ -84,8 +92,8 @@ export default function ChatScreen({ route, navigation }: Props) {
 
       // Use default or first writable calendar
       const defaultCal =
-        writableCalendars.find((c: any) => c.isPrimary) ||
-        writableCalendars.find((c: any) => c.source.name === 'iCloud') ||
+        writableCalendars.find((c: Calendar.Calendar) => c.isPrimary) ||
+        writableCalendars.find((c: Calendar.Calendar) => c.source.name === 'iCloud') ||
         writableCalendars[0];
 
       // Parse date and time
@@ -114,9 +122,10 @@ export default function ChatScreen({ route, navigation }: Props) {
       });
 
       Alert.alert('Added!', 'Event added to your calendar with a 30-minute reminder.');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      Alert.alert('Error', 'Could not add to calendar.');
+      const message = error instanceof Error ? error.message : 'Could not add to calendar.';
+      Alert.alert('Error', message);
     }
   };
 
@@ -125,20 +134,31 @@ export default function ChatScreen({ route, navigation }: Props) {
     return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   };
 
-  const renderMessage = ({ item }: { item: any }) => (
-    <View style={[styles.messageBubble, item.isMe ? styles.myMessage : styles.theirMessage]}>
-      {!item.isMe && <Text style={styles.senderName}>{item.senderName}</Text>}
-      <Text style={[styles.messageText, item.isMe && styles.myMessageText]}>{item.text}</Text>
-      <Text style={[styles.messageTime, item.isMe && styles.myMessageTime]}>
-        {formatTime(item.createdAt)}
-      </Text>
+  const renderMessage = ({ item }: { item: MessageWithIsMe }) => (
+    <View style={[styles.messageBubbleContainer, item.isMe ? styles.myMessageContainer : styles.theirMessageContainer]}>
+      {!item.isMe && (
+        <Avatar name={item.senderName} uri={item.senderPhotoUrl} size={32} style={styles.messageAvatar} />
+      )}
+      <View style={[styles.messageBubble, item.isMe ? styles.myMessage : styles.theirMessage]}>
+        {!item.isMe && <Text style={styles.senderName}>{item.senderName}</Text>}
+        <Text style={[styles.messageText, item.isMe && styles.myMessageText]}>{item.text}</Text>
+        <Text style={[styles.messageTime, item.isMe && styles.myMessageTime]}>
+          {formatTime(item.createdAt)}
+        </Text>
+      </View>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Go back to previous screen"
+          accessibilityHint="Navigate back to the previous screen"
+          accessibilityRole="button"
+        >
           <Ionicons name="chevron-back" size={22} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
@@ -150,7 +170,13 @@ export default function ChatScreen({ route, navigation }: Props) {
           </Text>
         </View>
         {isHelper && (
-          <TouchableOpacity style={styles.calendarBtn} onPress={handleAddToCalendar}>
+          <TouchableOpacity
+            style={styles.calendarBtn}
+            onPress={handleAddToCalendar}
+            accessibilityLabel="Add to calendar"
+            accessibilityHint="Add this request event to your device calendar"
+            accessibilityRole="button"
+          >
             <Ionicons name="calendar-outline" size={22} color={theme.colors.primary} />
           </TouchableOpacity>
         )}
@@ -164,7 +190,7 @@ export default function ChatScreen({ route, navigation }: Props) {
         <FlatList
           ref={flatListRef}
           data={messages ?? []}
-          keyExtractor={(item: any) => `message-${item.id}`}
+          keyExtractor={(item: MessageWithIsMe) => `message-${item.id}`}
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
           getItemLayout={(data, index) => ({
@@ -174,7 +200,13 @@ export default function ChatScreen({ route, navigation }: Props) {
           })}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.gray.medium} />
+              <Ionicons
+                name="chatbubbles-outline"
+                size={48}
+                color={theme.colors.gray.medium}
+                accessibilityLabel="Chat icon"
+                accessibilityHint="No messages yet, start the conversation"
+              />
               <Text style={styles.emptyTitle}>Start the conversation</Text>
               <Text style={styles.emptyText}>
                 Coordinate details, share updates, or ask questions about this request.
@@ -186,6 +218,7 @@ export default function ChatScreen({ route, navigation }: Props) {
           windowSize={15}
           initialNumToRender={5}
           inverted={false}
+          legacyImplementation={false}
         />
 
         <View style={styles.inputContainer}>
@@ -197,11 +230,16 @@ export default function ChatScreen({ route, navigation }: Props) {
             onChangeText={setText}
             multiline
             maxLength={500}
+            accessibilityLabel="Message input"
+            accessibilityHint="Type your message here"
           />
           <TouchableOpacity
             style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
             onPress={handleSend}
             disabled={!text.trim() || sending}
+            accessibilityLabel="Send message"
+            accessibilityHint="Send your message to the conversation"
+            accessibilityRole="button"
           >
             <Ionicons
               name="send"
@@ -364,5 +402,20 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: theme.colors.gray.light,
+  },
+  messageBubbleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 12,
+    gap: 8,
+  },
+  myMessageContainer: {
+    justifyContent: 'flex-end',
+  },
+  theirMessageContainer: {
+    justifyContent: 'flex-start',
+  },
+  messageAvatar: {
+    marginBottom: 4,
   },
 });

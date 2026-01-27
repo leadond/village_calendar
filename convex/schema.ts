@@ -1,25 +1,40 @@
+// convex/schema.ts
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
-  ...authTables,
 
   profiles: defineTable({
-    // Convex Auth identity.subject is a stable string identifier, not a DocId.
-    userId: v.string(),
+    // ✅ Stable identity keys
+    tokenIdentifier: v.optional(v.string()),
+    issuer: v.optional(v.string()),
+    subject: v.optional(v.string()),
+
+    // ✅ Backward-compatible fields
+    userId: v.string(), // legacy (previously identity.subject)
+    email: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
+    photoStorageId: v.optional(v.id("_storage")),
+
     name: v.string(),
     role: v.union(v.literal("parent"), v.literal("helper")),
     villageId: v.id("villages"),
+
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    lastActiveAt: v.optional(v.number()),
+    status: v.optional(v.union(v.literal("active"), v.literal("pending"), v.literal("rejected"))),
   })
+    .index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_userId", ["userId"])
+    .index("by_email", ["email"])
+    .index("by_subject", ["subject"])
     .index("by_villageId", ["villageId"]),
 
   villages: defineTable({
     name: v.string(),
-    code: v.string(), // Join code for the village
+    code: v.string(),
     createdBy: v.optional(v.string()),
-    // Monetization (per-village)
     plan: v.optional(v.union(v.literal("free"), v.literal("pro"))),
     subscriptionStatus: v.optional(
       v.union(v.literal("inactive"), v.literal("trial"), v.literal("active"), v.literal("expired"))
@@ -57,9 +72,11 @@ export default defineSchema({
     time: v.string(),
     status: v.union(v.literal("open"), v.literal("claimed")),
     claimedBy: v.optional(v.string()),
+    claimedByName: v.optional(v.string()),
   })
     .index("by_villageId", ["villageId"])
-    .index("by_createdBy", ["createdBy"]),
+    .index("by_createdBy", ["createdBy"])
+    .index("by_claimedBy", ["claimedBy"]),
 
   messages: defineTable({
     requestId: v.id("helpRequests"),

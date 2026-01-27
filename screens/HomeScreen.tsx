@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
@@ -20,6 +21,7 @@ import { trackRequestClaimed } from '../utils/analytics';
 import { theme } from '../lib/theme';
 import { Ionicons } from '@expo/vector-icons';
 import Skeleton from '../components/Skeleton';
+import Avatar from '../components/Avatar';
 interface Props {
   profile: {
     id: string;
@@ -32,16 +34,16 @@ interface Props {
 
 const RequestSkeleton = () => (
   <View style={styles.card}>
-    <View style={styles.cardHeader}>
-      <Skeleton width={150} height={20} />
-      <Skeleton width={60} height={20} />
+    <View style={styles.cardRow}>
+      <Skeleton width={48} height={48} style={{ borderRadius: 24 }} />
+      <View style={{ flex: 1, marginLeft: 12, gap: 6 }}>
+        <Skeleton width="70%" height={20} />
+        <Skeleton width="40%" height={16} />
+        <Skeleton width="30%" height={14} />
+      </View>
+      <Skeleton width={36} height={36} style={{ borderRadius: 18 }} />
     </View>
-    <Skeleton width="100%" height={24} style={{ marginBottom: 6 }} />
-    <Skeleton width="80%" height={20} />
-    <View style={styles.cardFooter}>
-      <Skeleton width={120} height={16} />
-    </View>
-    <Skeleton width="100%" height={48} style={{ marginTop: 12 }} />
+    <Skeleton width="100%" height={40} style={{ marginTop: 16, borderRadius: 12 }} />
   </View>
 );
 
@@ -99,56 +101,54 @@ export default function HomeScreen({ profile }: Props) {
       });
     };
 
+    const isToday = new Date(item.date).toDateString() === new Date().toDateString();
+
     return (
       <View style={[styles.card, !isOpen && styles.cardClaimed]}>
-        <View style={styles.cardHeader}>
-          <View style={styles.dateTimeContainer}>
-            <Ionicons name="calendar-outline" size={16} color={theme.colors.primary} />
+        <View style={styles.cardRow}>
+          {/* Left: Category Icon */}
+          <View style={[styles.categoryIcon, isOpen ? styles.categoryOpen : styles.categoryClaimed]}>
+            <Ionicons
+              name={item.title.toLowerCase().includes('pick') ? 'car-sport' : 'home'}
+              size={24}
+              color={isOpen ? theme.colors.primary : theme.colors.status.claimed}
+            />
+          </View>
+
+          {/* Middle: Content */}
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
             <Text style={styles.dateTime}>
-              {formatDate(item.date)} at {item.time}
+              {formatDate(item.date)} • {item.time}
             </Text>
+            <View style={styles.userRow}>
+              <Text style={styles.postedBy}>by {item.createdByName}</Text>
+            </View>
           </View>
-          <View style={[styles.statusBadge, isOpen ? styles.statusOpen : styles.statusClaimed]}>
-            <Text style={styles.statusText}>{isOpen ? 'Open' : 'Claimed'}</Text>
+
+          {/* Right: Avatar & Action */}
+          <View style={styles.cardRight}>
+            <Avatar name={item.createdByName} uri={item.createdByPhotoUrl} size={36} />
+            {canChat && (
+              <TouchableOpacity onPress={openChat} style={styles.miniChatBtn}>
+                <Ionicons name="chatbubble" size={16} color={theme.colors.primary} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Text style={styles.cardDescription}>{item.description}</Text>
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.postedBy}>Posted by {item.createdByName}</Text>
-          {item.claimedByName && <Text style={styles.claimedBy}>Helping: {item.claimedByName}</Text>}
-        </View>
-
+        {/* Footer Actions */}
         {canClaim && (
           <TouchableOpacity
             style={styles.claimButton}
             onPress={() => handleClaim(item.id)}
             disabled={isClaiming === item.id}
-            accessibilityRole="button"
-            accessibilityLabel={`I'll help with ${item.title}`}
           >
             {isClaiming === item.id ? (
               <ActivityIndicator color={theme.colors.white} />
             ) : (
-              <>
-                <Ionicons name="hand-left" size={20} color={theme.colors.white} />
-                <Text style={styles.claimButtonText}>I'll Help!</Text>
-              </>
+              <Text style={styles.claimButtonText}>I'll Help</Text>
             )}
-          </TouchableOpacity>
-        )}
-
-        {canChat && (
-          <TouchableOpacity
-            style={styles.chatButton}
-            onPress={openChat}
-            accessibilityRole="button"
-            accessibilityLabel={`Message about ${item.title}`}
-          >
-            <Ionicons name="chatbubble-outline" size={18} color={theme.colors.primary} />
-            <Text style={styles.chatButtonText}>Message</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -188,6 +188,8 @@ export default function HomeScreen({ profile }: Props) {
           removeClippedSubviews={true}
           maxToRenderPerBatch={5}
           windowSize={10}
+          initialNumToRender={3}
+          legacyImplementation={false}
         />
       </SafeAreaView>
     );
@@ -196,9 +198,16 @@ export default function HomeScreen({ profile }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {profile.name}!</Text>
-          <Text style={styles.villageName}>{profile.villageName}</Text>
+        <View style={styles.headerTop}>
+          <Image
+            source={require('../assets/logo.png')}
+            style={{ width: 40, height: 40, marginRight: 12 }}
+            resizeMode="contain"
+          />
+          <View>
+            <Text style={styles.greeting}>Hello, {profile.name}!</Text>
+            <Text style={styles.villageName}>{profile.villageName}</Text>
+          </View>
         </View>
         <View style={styles.roleBadge}>
           <Ionicons
@@ -243,6 +252,7 @@ export default function HomeScreen({ profile }: Props) {
         maxToRenderPerBatch={5}
         windowSize={10}
         initialNumToRender={5}
+        legacyImplementation={false}
       />
     </SafeAreaView>
   );
@@ -255,17 +265,20 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
-    paddingBottom: 16,
     backgroundColor: theme.colors.white,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.gray.light,
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   greeting: {
     fontSize: theme.fontSizes.xl,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: theme.colors.text.primary,
   },
   villageName: {
@@ -299,105 +312,86 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: theme.colors.white,
-    borderRadius: 16,
+    borderRadius: 20, // More rounded as per mockup
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
   },
   cardClaimed: {
-    opacity: 0.7,
+    opacity: 0.8,
+    backgroundColor: theme.colors.gray.light + '40',
   },
-  cardHeader: {
+  cardRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 12,
   },
-  dateTimeContainer: {
+  categoryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  categoryOpen: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary + '10', // 10% opacity primary
+  },
+  categoryClaimed: {
+    borderColor: theme.colors.status.claimed,
+    backgroundColor: theme.colors.status.claimed + '10',
+  },
+  cardContent: {
+    flex: 1,
+    gap: 2,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.text.primary,
+  },
+  dateTime: {
+    fontSize: 13,
+    color: theme.colors.text.secondary,
+    fontWeight: '500',
+  },
+  userRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  dateTime: {
-    fontSize: theme.fontSizes.sm,
-    color: theme.colors.primary,
-    fontWeight: '500',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusOpen: {
-    backgroundColor: theme.colors.accent + '20',
-  },
-  statusClaimed: {
-    backgroundColor: theme.colors.status.claimed + '20',
-  },
-  statusText: {
-    fontSize: theme.fontSizes.xs,
-    fontWeight: '600',
-  },
-  cardTitle: {
-    fontSize: theme.fontSizes.lg,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    marginBottom: 6,
-  },
-  cardDescription: {
-    fontSize: theme.fontSizes.sm,
-    color: theme.colors.text.secondary,
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  cardFooter: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.gray.light,
-    paddingTop: 12,
+    marginTop: 2,
   },
   postedBy: {
-    fontSize: theme.fontSizes.xs,
+    fontSize: 12,
     color: theme.colors.text.secondary,
   },
-  claimedBy: {
-    fontSize: theme.fontSizes.xs,
-    color: theme.colors.status.claimed,
-    fontWeight: '500',
-    marginTop: 4,
+  cardRight: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  miniChatBtn: {
+    padding: 6,
+    backgroundColor: theme.colors.primary + '15',
+    borderRadius: 8,
   },
   claimButton: {
     backgroundColor: theme.colors.primary,
     borderRadius: 12,
-    height: 48,
-    flexDirection: 'row',
-    justifyContent: 'center',
+    paddingVertical: 10,
     alignItems: 'center',
     marginTop: 12,
-    gap: 8,
   },
   claimButtonText: {
     color: theme.colors.white,
-    fontSize: theme.fontSizes.md,
-    fontWeight: '600',
-  },
-  chatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.primary + '15',
-    borderRadius: 12,
-    height: 44,
-    marginTop: 10,
-    gap: 8,
-  },
-  chatButtonText: {
-    color: theme.colors.primary,
-    fontSize: theme.fontSizes.sm,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',

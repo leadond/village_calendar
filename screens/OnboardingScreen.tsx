@@ -29,10 +29,11 @@ interface Props {
 
 export default function OnboardingScreen({ route }: Props) {
   const createVillage = useMutation(api.villages.createVillage);
-  const createProfile = useMutation(api.profiles.createProfile);
+  const createMyProfile = useMutation(api.profiles.createMyProfile);
 
   const [step, setStep] = useState<'name' | 'role' | 'village'>('name');
   const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [role, setRole] = useState<Role | null>(null);
   const [villageMode, setVillageMode] = useState<'create' | 'join' | null>(null);
   const [villageName, setVillageName] = useState('');
@@ -88,11 +89,11 @@ export default function OnboardingScreen({ route }: Props) {
         villageId = invitePreview.villageId;
       }
 
-      await createProfile({
+      await createMyProfile({
         name: name.trim(),
         role,
         villageId,
-        inviteCode: villageMode === 'join' ? inviteCode.toUpperCase() : undefined,
+        phoneNumber: phoneNumber.trim() || undefined,
       });
 
       // Don't set saving to false - let the profile query update trigger navigation
@@ -117,6 +118,17 @@ export default function OnboardingScreen({ route }: Props) {
         placeholderTextColor={theme.colors.gray.medium}
         accessibilityLabel="Name input"
         accessibilityHint="Enter your full name"
+      />
+
+      <TextInput
+        style={styles.input}
+        placeholder="Phone Number (optional)"
+        value={phoneNumber}
+        onChangeText={setPhoneNumber}
+        keyboardType="phone-pad"
+        placeholderTextColor={theme.colors.gray.medium}
+        accessibilityLabel="Phone Number input"
+        accessibilityHint="Enter your phone number"
       />
 
       <TouchableOpacity
@@ -341,6 +353,10 @@ const styles = StyleSheet.create({
   },
   stepContent: {
     flex: 1,
+    width: '100%',
+    maxWidth: 500, // Professional form width
+    alignSelf: 'center',
+    paddingTop: 20,
   },
   stepTitle: {
     fontSize: theme.fontSizes.xl,

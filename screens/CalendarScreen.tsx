@@ -1,50 +1,56 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from 'convex/react';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { api } from '../convex/_generated/api';
+import { Id } from '../convex/_generated/dataModel';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../lib/theme';
 import Skeleton from '../components/Skeleton';
+import Avatar from '../components/Avatar';
+import { RootStackParamList, VillageEvent, HelpRequest } from '../types';
 
 type Mode = 'day' | 'week' | 'month';
+
+type CalendarItem = (VillageEvent | HelpRequest) & { kind: 'request' | 'event' };
 
 interface Props {
   profile: {
     id: string;
     role: 'parent' | 'helper';
-    villageId: any;
+    villageId: Id<'villages'>;
     villageName: string;
   };
 }
 
 const DayViewSkeleton = () => (
-  <View style={{ padding: 16 }}>
-    <Skeleton width="100%" height={40} style={{ marginBottom: 16 }} />
-    <Skeleton width="100%" height={120} style={{ marginBottom: 12 }} />
-    <Skeleton width="100%" height={120} style={{ marginBottom: 12 }} />
+  <View style={styles.dayViewSkeleton}>
+    <Skeleton width="100%" height={40} style={styles.skeletonMarginBottom16} />
+    <Skeleton width="100%" height={120} style={styles.skeletonMarginBottom12} />
+    <Skeleton width="100%" height={120} style={styles.skeletonMarginBottom12} />
   </View>
 );
 
 const MonthViewSkeleton = () => (
-  <View style={{ paddingHorizontal: 12, paddingTop: 14 }}>
+  <View style={styles.monthViewSkeleton}>
     <View style={styles.monthHeader}>
-      <Skeleton width={36} height={36} style={{ borderRadius: 18 }} />
+      <Skeleton width={36} height={36} style={styles.skeletonRound} />
       <Skeleton width={150} height={24} />
-      <Skeleton width={36} height={36} style={{ borderRadius: 18 }} />
+      <Skeleton width={36} height={36} style={styles.skeletonRound} />
     </View>
     <View style={styles.dowRow}>
       {Array.from({ length: 7 }).map((_, i) => (
-        <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+        <View key={i} style={styles.monthViewSkeletonDowItem}>
           <Skeleton width="50%" height={12} />
         </View>
       ))}
     </View>
     <View style={styles.grid}>
       {Array.from({ length: 42 }).map((_, i) => (
-        <View key={i} style={{ width: '14.2857%', aspectRatio: 1, padding: 4 }}>
-          <Skeleton width="100%" height="100%" />
+        <View key={i} style={styles.monthViewSkeletonGridItem}>
+          <Skeleton width="100%" height={100} />
         </View>
       ))}
     </View>
@@ -84,11 +90,6 @@ function formatMonthTitle(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
-function formatDayTitle(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-}
-
 function parseTimeToMinutes(time: string): number | null {
   // Accept: "9:00 AM", "12:00 PM", "18:30", "6 PM", "6pm"
   const t = time.trim().toUpperCase();
@@ -117,14 +118,14 @@ function parseTimeToMinutes(time: string): number | null {
   return null;
 }
 
-function sortByTime(a: any, b: any): number {
+function sortByTime(a: { time: string }, b: { time: string }): number {
   const am = parseTimeToMinutes(a.time) ?? 0;
   const bm = parseTimeToMinutes(b.time) ?? 0;
   return am - bm;
 }
 
 export default function CalendarScreen({ profile }: Props) {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [mode, setMode] = useState<Mode>('month');
   const [selectedDate, setSelectedDate] = useState<string>(isoToday());
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
@@ -132,18 +133,18 @@ export default function CalendarScreen({ profile }: Props) {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
-  const requests = useQuery(api.helpRequests.getVillageRequests as any, {
+  const requests = useQuery(api.helpRequests.getVillageRequests, {
     villageId: profile.villageId,
   });
 
-  const villageEvents = useQuery(api.events.getVillageEvents as any, {
+  const villageEvents = useQuery(api.events.getVillageEvents, {
     villageId: profile.villageId,
   });
-  
+
   const isLoading = requests === undefined || villageEvents === undefined;
 
   const eventsByDate = useMemo(() => {
-    const map: Record<string, any[]> = {};
+    const map: Record<string, CalendarItem[]> = {};
     for (const r of requests ?? []) {
       const iso = typeof r.date === 'string' ? r.date.slice(0, 10) : null;
       if (!iso) continue;
@@ -161,6 +162,21 @@ export default function CalendarScreen({ profile }: Props) {
     }
     return map;
   }, [requests, villageEvents]);
+
+  // Memoize date formatting functions to prevent recreation
+  const formatDateTitle = useMemo(() => {
+    return (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    };
+  }, []);
+
+  const formatWeekDay = useMemo(() => {
+    return (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { weekday: 'short' });
+    };
+  }, []);
 
   // Memoize week calculation
   const weekDays = useMemo(() => {
@@ -188,14 +204,14 @@ export default function CalendarScreen({ profile }: Props) {
       const iso = toISODate(d);
       const inMonth = d.getMonth() === month;
       const isSelected = iso === selectedDate;
-      const count = eventsByDate[iso]?.length ?? 0;
-      return { iso, day: d.getDate(), inMonth, isSelected, count };
+      const items = eventsByDate[iso] ?? [];
+      return { iso, day: d.getDate(), inMonth, isSelected, items };
     });
   }, [visibleMonth, selectedDate, mode, eventsByDate]);
 
-  const dayEvents = (eventsByDate[selectedDate] ?? []) as any[];
+  const dayEvents = eventsByDate[selectedDate] ?? [];
 
-  const renderEvent = ({ item }: { item: any }) => (
+  const renderEvent = useCallback(({ item }: { item: CalendarItem }) => (
     <View style={styles.eventCard}>
       <View style={styles.eventHeader}>
         <View style={styles.eventTimeRow}>
@@ -218,16 +234,23 @@ export default function CalendarScreen({ profile }: Props) {
       <Text style={styles.eventDescription}>{item.description}</Text>
 
       <View style={styles.eventFooter}>
-        <Text style={styles.eventMeta}>Posted by {item.createdByName}</Text>
+        <View style={styles.userRow}>
+          <Avatar name={item.createdByName} uri={item.createdByPhotoUrl} size={24} />
+          <Text style={styles.eventMeta}>Posted by {item.createdByName}</Text>
+        </View>
         {item.kind !== 'event' && item.claimedByName ? (
-          <Text style={styles.eventMeta}>Helping: {item.claimedByName}</Text>
+          <View style={styles.userRow}>
+            <Text style={styles.eventMeta}>Helping: </Text>
+            <Avatar name={item.claimedByName} uri={item.claimedByPhotoUrl} size={24} />
+            <Text style={styles.eventMeta}>{item.claimedByName}</Text>
+          </View>
         ) : null}
       </View>
     </View>
-  );
+  ), []);
 
   const renderDay = () => (
-    <View style={{ flex: 1 }}>
+    <View style={styles.flex1}>
       <View style={styles.dayHeader}>
         <TouchableOpacity
           onPress={() => setSelectedDate(addDays(selectedDate, -1))}
@@ -238,7 +261,7 @@ export default function CalendarScreen({ profile }: Props) {
         >
           <Ionicons name="chevron-back" size={22} color={theme.colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.dayTitle}>{formatDayTitle(selectedDate)}</Text>
+        <Text style={styles.dayTitle}>{formatDateTitle(selectedDate)}</Text>
         <TouchableOpacity
           onPress={() => setSelectedDate(addDays(selectedDate, 1))}
           style={styles.navIcon}
@@ -249,17 +272,12 @@ export default function CalendarScreen({ profile }: Props) {
           <Ionicons name="chevron-forward" size={22} color={theme.colors.text.primary} />
         </TouchableOpacity>
       </View>
-      {isLoading ? <DayViewSkeleton/> : (
+      {isLoading ? <DayViewSkeleton /> : (
         <FlatList
           data={dayEvents}
-          keyExtractor={(item: any) => `event-${item.id}`}
+          keyExtractor={(item: CalendarItem) => `event-${item._id}`}
           renderItem={renderEvent}
-          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
-          getItemLayout={(data, index) => ({
-            length: 190,
-            offset: 190 * index,
-            index,
-          })}
+          contentContainerStyle={styles.dayFlatListContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={56} color={theme.colors.gray.medium} />
@@ -271,14 +289,20 @@ export default function CalendarScreen({ profile }: Props) {
           maxToRenderPerBatch={5}
           windowSize={10}
           initialNumToRender={3}
+          legacyImplementation={false}
+          getItemLayout={(data, index) => ({
+            length: 180,
+            offset: 180 * index,
+            index,
+          })}
         />
       )}
     </View>
   );
 
   const renderWeek = () => (
-    <View style={{ flex: 1 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekStrip}>
+    <View style={styles.flex1}>
+      <ScrollView horizontal={false} contentContainerStyle={[styles.weekStrip, styles.weekScrollViewContent]}>
         {weekDays.map((iso) => {
           const isSelected = iso === selectedDate;
           const d = new Date(`${iso}T00:00:00`);
@@ -290,7 +314,7 @@ export default function CalendarScreen({ profile }: Props) {
               onPress={() => setSelectedDate(iso)}
             >
               <Text style={[styles.weekDayName, isSelected && styles.weekDayNameSelected]}>
-                {d.toLocaleDateString('en-US', { weekday: 'short' })}
+                {formatWeekDay(iso)}
               </Text>
               <Text style={[styles.weekDayNumber, isSelected && styles.weekDayNumberSelected]}>
                 {d.getDate()}
@@ -306,11 +330,11 @@ export default function CalendarScreen({ profile }: Props) {
 
   const renderMonth = () => {
     if (isLoading) {
-      return <MonthViewSkeleton/>
+      return <MonthViewSkeleton />
     }
 
     return (
-      <View style={{ flex: 1 }}>
+      <View style={styles.flex1}>
         <View style={styles.monthHeader}>
           <TouchableOpacity
             onPress={() => setVisibleMonth((m: Date) => addMonths(m, -1))}
@@ -332,46 +356,64 @@ export default function CalendarScreen({ profile }: Props) {
             <Ionicons name="chevron-forward" size={22} color={theme.colors.text.primary} />
           </TouchableOpacity>
         </View>
-
-        <View style={styles.dowRow}>
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-            <Text key={d} style={styles.dowText}>
-              {d}
-            </Text>
-          ))}
-        </View>
-
-        <View style={styles.grid}>
-          {monthCells.map((c) => (
-            <TouchableOpacity
-              key={c.iso}
-              style={[
-                styles.cell,
-                c.isSelected && styles.cellSelected,
-                !c.inMonth && styles.cellOutOfMonth,
-              ]}
-              onPress={() => {
-                setSelectedDate(c.iso);
-                setMode('day');
-              }}
-            >
-              <Text
-                style={[
-                  styles.cellText,
-                  !c.inMonth && styles.cellTextOutOfMonth,
-                  c.isSelected && styles.cellTextSelected,
-                ]}
-              >
-                {c.day}
+        <ScrollView contentContainerStyle={styles.monthScrollContent}>
+          <View style={styles.dowRow}>
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+              <Text key={d} style={styles.dowText}>
+                {d}
               </Text>
-              {c.count > 0 ? <View style={styles.dot} /> : <View style={styles.dotPlaceholder} />}
-            </TouchableOpacity>
-          ))}
-        </View>
+            ))}
+          </View>
 
-        <View style={styles.monthHint}>
-          <Text style={styles.monthHintText}>Tap a day to view details</Text>
-        </View>
+          <View style={styles.grid}>
+            {monthCells.map((c) => (
+              <TouchableOpacity
+                key={c.iso}
+                style={[
+                  styles.cell,
+                  c.isSelected && styles.cellSelected,
+                  !c.inMonth && styles.cellOutOfMonth,
+                ]}
+                onPress={() => {
+                  setSelectedDate(c.iso);
+                  setMode('day');
+                }}
+              >
+                <Text
+                  style={[
+                    styles.cellText,
+                    !c.inMonth && styles.cellTextOutOfMonth,
+                    c.isSelected && styles.cellTextSelected,
+                  ]}
+                >
+                  {c.day}
+                </Text>
+                <View style={{ flex: 1, gap: 2 }}>
+                  {c.items.slice(0, 3).map((item, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.miniLabel,
+                        item.kind === 'event' ? styles.miniLabelEvent : styles.miniLabelRequest,
+                      ]}
+                    >
+                      <Text style={styles.miniLabelText} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                    </View>
+                  ))}
+                  {c.items.length > 3 && (
+                    <Text style={styles.moreText}>+{c.items.length - 3} more</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.monthHint}>
+            <Text style={styles.monthHintText}>Tap a day to view details</Text>
+          </View>
+        </ScrollView>
       </View>
     );
   };
@@ -391,7 +433,8 @@ export default function CalendarScreen({ profile }: Props) {
             accessibilityLabel="Add Event"
             accessibilityHint="Opens a screen to create a new village event"
           >
-            <Ionicons name="add" size={22} color={theme.colors.white} />
+            <Ionicons name="add" size={20} color={theme.colors.white} />
+            <Text style={styles.addEventBtnText}>Add Event</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.segment}>
@@ -435,6 +478,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  dayViewSkeleton: {
+    padding: 16,
+  },
+  skeletonMarginBottom16: {
+    marginBottom: 16,
+  },
+  skeletonMarginBottom12: {
+    marginBottom: 12,
+  },
+  monthViewSkeleton: {
+    paddingHorizontal: 12,
+    paddingTop: 14,
+  },
+  skeletonRound: {
+    borderRadius: 18,
+  },
+  monthViewSkeletonDowItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  monthViewSkeletonGridItem: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    padding: 4,
+  },
+  flex1: {
+    flex: 1,
+  },
+  dayFlatListContent: {
+    padding: 16,
+    paddingBottom: 120,
+  },
+  weekScrollViewContent: {
+    flexWrap: 'wrap',
+  },
   header: {
     padding: 20,
     paddingBottom: 14,
@@ -448,12 +526,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   addEventBtn: {
-    width: 40,
+    paddingHorizontal: 16,
     height: 40,
     borderRadius: 20,
     backgroundColor: theme.colors.primary,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+  },
+  addEventBtnText: {
+    color: theme.colors.white,
+    fontWeight: '600',
+    fontSize: theme.fontSizes.sm,
   },
   title: {
     fontSize: theme.fontSizes.xl,
@@ -537,25 +622,29 @@ const styles = StyleSheet.create({
   cell: {
     width: '14.2857%',
     aspectRatio: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: theme.colors.white,
     marginBottom: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 4,
     borderWidth: 1,
     borderColor: theme.colors.gray.light,
+    overflow: 'hidden',
   },
   cellSelected: {
     borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primary + '10',
+    backgroundColor: theme.colors.white,
+    borderWidth: 2,
   },
   cellOutOfMonth: {
     backgroundColor: theme.colors.background,
+    opacity: 0.5,
   },
   cellText: {
-    fontSize: theme.fontSizes.sm,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.colors.text.secondary,
+    alignSelf: 'flex-end',
+    marginBottom: 2,
   },
   cellTextOutOfMonth: {
     color: theme.colors.gray.medium,
@@ -563,19 +652,26 @@ const styles = StyleSheet.create({
   cellTextSelected: {
     color: theme.colors.primary,
   },
-  dot: {
-    width: 6,
-    height: 6,
+  miniLabel: {
+    paddingHorizontal: 3,
+    paddingVertical: 1,
     borderRadius: 3,
-    backgroundColor: theme.colors.primary,
-    marginTop: 4,
   },
-  dotPlaceholder: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'transparent',
-    marginTop: 4,
+  miniLabelEvent: {
+    backgroundColor: theme.colors.primary + '20',
+  },
+  miniLabelRequest: {
+    backgroundColor: theme.colors.accent + '20',
+  },
+  miniLabelText: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: theme.colors.text.primary,
+  },
+  moreText: {
+    fontSize: 8,
+    color: theme.colors.text.secondary,
+    paddingLeft: 2,
   },
   monthHint: {
     paddingHorizontal: 16,
@@ -686,6 +782,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 6,
     gap: 8,
+    ...(Platform.OS === 'web' && { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }),
   },
   weekDayChip: {
     width: 64,
@@ -730,5 +827,15 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: 'transparent',
     marginTop: 6,
+  },
+  monthScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 100,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
   },
 });

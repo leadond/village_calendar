@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,53 +6,197 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuthActions } from '@convex-dev/auth/react';
+import { useSignUp } from '@clerk/clerk-expo';
 import { theme } from '../lib/theme';
 import { trackUserSignup } from '../utils/analytics';
+import { showAlert } from '../utils/alerts';
+import { getFriendlyErrorMessage } from '../utils/errors';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Props {
   navigation: any;
 }
 
 export default function SignupScreen({ navigation }: Props) {
-  const { signIn } = useAuthActions();
+  const { isLoaded, signUp, setActive } = useSignUp();
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState('');
+
+  const normalizedEmail = useMemo(() => email.toLowerCase().trim(), [email]);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+
+  const showError = (title: string, message: string) => {
+    setErrorMessage(message);
+    showAlert(title, message);
+  };
 
   const handleSignup = async () => {
-    if (!email.trim() || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!isLoaded) return;
+
+    if (!normalizedEmail || !password || !confirmPassword || !username) {
+      showError('Error', 'Please fill in all fields');
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+    if (password.length < 8) {
+      showError('Error', 'Password must be at least 8 characters');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showError('Error', 'Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      console.log("[SignupScreen] Creating sign up attempt for:", normalizedEmail);
+      await signUp.create({
+        emailAddress: normalizedEmail,
+        password,
+        username,
+      });
+
+      console.log("[SignupScreen] Preparing email verification");
+      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+
+      setPendingVerification(true);
+      trackUserSignup();
+    } catch (error: any) {
+      console.error("[SignupScreen] signUp error:", JSON.stringify(error, null, 2));
+      const message = error.errors?.[0]?.longMessage || error.message || 'Signup failed';
+      showError('Signup Failed', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!isLoaded) return;
+    if (!code) {
+      showError('Error', 'Please enter the verification code');
       return;
     }
 
     setLoading(true);
     try {
-      await signIn('password', { email: email.trim().toLowerCase(), password, flow: 'signUp' });
-      trackUserSignup();
+      console.log("[SignupScreen] Attempting email verification");
+      const emailAttempt = await signUp.attemptEmailAddressVerification({
+        code,
+      });
+
+      await handleCompleteSignUp(emailAttempt);
     } catch (error: any) {
-      Alert.alert('Signup Failed', error?.message || 'Unable to create account');
+      console.error("[SignupScreen] Verification error:", JSON.stringify(error, null, 2));
+      const message = error.errors?.[0]?.longMessage || error.message || 'Verification failed';
+      showError('Verification Failed', message);
+      // Handle "already verified" case gracefully
+      if (error.errors?.[0]?.code === 'verification_already_verified') {
+        console.log("[SignupScreen] Email already verified. Checking status...");
+        if (signUp.status === 'complete' && signUp.createdSessionId) {
+          console.log("[SignupScreen] Sign up complete, setting session...");
+          await setActive({ session: signUp.createdSessionId });
+          return;
+        }
+      }
+
+      // Handle "session already exists" case
+      if (error.errors?.[0]?.code === 'session_exists') {
+        console.log("[SignupScreen] Session already exists. Redirecting...");
+        // If we can't get the sessionId easily from the error, user is likely already active.
+        // We can try to navigate, or just let the AuthGate handle it on refresh.
+        // But optimally, we check if there's a current session.
+        if (signUp.createdSessionId) {
+          await setActive({ session: signUp.createdSessionId });
+        }
+        return;
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const handleCompleteSignUp = async (completeSignUp: any) => {
+    if (completeSignUp.status === 'complete') {
+      console.log("[SignupScreen] Verification complete, setting active session");
+      await setActive({ session: completeSignUp.createdSessionId });
+    } else {
+      console.error("[SignupScreen] Verification incomplete:", JSON.stringify(completeSignUp, null, 2));
+      const missing = completeSignUp.missingFields?.join(', ') || 'unknown requirements';
+      const unverified = completeSignUp.unverifiedFields?.join(', ') || 'none';
+      showError('Verification Incomplete', `Status: ${completeSignUp.status}\nMissing: ${missing}\nUnverified: ${unverified}`);
+    }
+  };
+
+  if (pendingVerification) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          <View style={styles.scrollContent}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Verify Email</Text>
+              <Text style={styles.subtitle}>
+                Enter the code sent to {email}
+              </Text>
+            </View>
+
+            <View style={styles.form}>
+              <TextInput
+                style={styles.input}
+                placeholder="Verification Code"
+                value={code}
+                onChangeText={setCode}
+                keyboardType="number-pad"
+                placeholderTextColor={theme.colors.gray.medium}
+                autoFocus
+              />
+
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleVerify}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    Verify Email
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.linkButton}
+                onPress={() => {
+                  setPendingVerification(false);
+                }}
+              >
+                <Text style={styles.linkText}>Back to Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -61,6 +205,13 @@ export default function SignupScreen({ navigation }: Props) {
         style={styles.content}
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
+          </TouchableOpacity>
+
           <View style={styles.header}>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Join your village community</Text>
@@ -69,45 +220,64 @@ export default function SignupScreen({ navigation }: Props) {
           <View style={styles.form}>
             <TextInput
               style={styles.input}
+              placeholder="Username"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              placeholderTextColor={theme.colors.gray.medium}
+            />
+
+            <TextInput
+              style={styles.input}
               placeholder="Email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(value) => {
+                setEmail(value);
+                if (errorMessage) setErrorMessage(null);
+              }}
               autoCapitalize="none"
               keyboardType="email-address"
               placeholderTextColor={theme.colors.gray.medium}
-              accessibilityLabel="Email input"
-              accessibilityHint="Enter your email address"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
 
             <TextInput
+              ref={passwordRef}
               style={styles.input}
-              placeholder="Password (min 6 characters)"
+              placeholder="Password (min 8 characters)"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => {
+                setPassword(value);
+                if (errorMessage) setErrorMessage(null);
+              }}
               secureTextEntry
               placeholderTextColor={theme.colors.gray.medium}
-              accessibilityLabel="Password input"
-              accessibilityHint="Enter a password of at least 6 characters"
+              returnKeyType="next"
+              onSubmitEditing={() => confirmPasswordRef.current?.focus()}
             />
 
             <TextInput
+              ref={confirmPasswordRef}
               style={styles.input}
               placeholder="Confirm Password"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(value) => {
+                setConfirmPassword(value);
+                if (errorMessage) setErrorMessage(null);
+              }}
               secureTextEntry
               placeholderTextColor={theme.colors.gray.medium}
-              accessibilityLabel="Confirm password input"
-              accessibilityHint="Re-enter your password to confirm"
+              returnKeyType="go"
+              onSubmitEditing={handleSignup}
             />
+
+            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleSignup}
               disabled={loading}
-              accessibilityRole="button"
-              accessibilityLabel="Create Account"
-              accessibilityHint="Creates your Village Calendar account"
             >
               {loading ? (
                 <ActivityIndicator color={theme.colors.white} />
@@ -119,10 +289,6 @@ export default function SignupScreen({ navigation }: Props) {
             <TouchableOpacity
               style={styles.linkButton}
               onPress={() => navigation.navigate('Login')}
-              accessibilityRole="link"
-              accessibilityLabel="Sign In"
-              accessibilityHint="Navigates to the sign in screen"
-              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
             >
               <Text style={styles.linkText}>
                 Already have an account? <Text style={styles.linkTextBold}>Sign In</Text>
@@ -134,6 +300,9 @@ export default function SignupScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
+
+const { width } = Dimensions.get('window');
+const maxFormWidth = Math.min(width - 48, 400);
 
 const styles = StyleSheet.create({
   container: {
@@ -164,6 +333,8 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
+    maxWidth: maxFormWidth,
+    alignSelf: 'center',
   },
   input: {
     backgroundColor: theme.colors.white,
@@ -202,4 +373,12 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '600',
   },
+  errorText: {
+    color: theme.colors.accent,
+    fontSize: theme.fontSizes.sm,
+    marginBottom: 8,
+  },
+  backButton: {
+    marginBottom: 20,
+  }
 });

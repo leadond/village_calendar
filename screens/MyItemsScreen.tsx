@@ -16,10 +16,12 @@ import * as Calendar from 'expo-calendar';
 import { showSuccess, showError } from '../utils/notifications';
 import { triggerSuccessHaptic } from '../utils/haptics';
 import { trackRequestDeleted, trackRequestUnclaimed } from '../utils/analytics';
+import { Platform } from 'react-native';
 
 import { theme } from '../lib/theme';
 import { Ionicons } from '@expo/vector-icons';
 import Skeleton from '../components/Skeleton';
+import Avatar from '../components/Avatar';
 
 const styles = StyleSheet.create({
   container: {
@@ -229,49 +231,65 @@ export default function MyItemsScreen({ profile }: Props) {
   const isLoading = profile.role === 'parent' ? myRequests === undefined : myClaims === undefined;
 
   const handleDelete = (requestId: any) => {
-    Alert.alert('Delete Request', 'Are you sure you want to delete this request?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setIsMutating(requestId);
-          try {
-            await deleteRequest({ requestId });
-            trackRequestDeleted({ villageId: profile.villageId, requestId });
-            triggerSuccessHaptic();
-            showSuccess('Request deleted');
-          } catch (error: any) {
-            showError(error.message || 'Failed to delete');
-          } finally {
-            setIsMutating(null);
-          }
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this request?')) {
+        performDelete(requestId);
+      }
+    } else {
+      Alert.alert('Delete Request', 'Are you sure you want to delete this request?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => performDelete(requestId),
         },
-      },
-    ]);
+      ]);
+    }
+  };
+
+  const performDelete = async (requestId: any) => {
+    setIsMutating(requestId);
+    try {
+      await deleteRequest({ requestId });
+      trackRequestDeleted({ villageId: profile.villageId, requestId });
+      triggerSuccessHaptic();
+      showSuccess('Request deleted');
+    } catch (error: any) {
+      showError(error.message || 'Failed to delete');
+    } finally {
+      setIsMutating(null);
+    }
   };
 
   const handleUnclaim = (requestId: any) => {
-    Alert.alert('Cancel Commitment', 'Are you sure you can no longer help with this?', [
-      { text: 'Keep', style: 'cancel' },
-      {
-        text: 'Cancel',
-        style: 'destructive',
-        onPress: async () => {
-          setIsMutating(requestId);
-          try {
-            await unclaimRequest({ requestId });
-            trackRequestUnclaimed({ villageId: profile.villageId, requestId });
-            triggerSuccessHaptic();
-            showSuccess('Commitment cancelled');
-          } catch (error: any) {
-            showError(error.message || 'Failed to unclaim');
-          } finally {
-            setIsMutating(null);
-          }
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you can no longer help with this?')) {
+        performUnclaim(requestId);
+      }
+    } else {
+      Alert.alert('Cancel Commitment', 'Are you sure you can no longer help with this?', [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'destructive',
+          onPress: () => performUnclaim(requestId),
         },
-      },
-    ]);
+      ]);
+    }
+  };
+
+  const performUnclaim = async (requestId: any) => {
+    setIsMutating(requestId);
+    try {
+      await unclaimRequest({ requestId });
+      trackRequestUnclaimed({ villageId: profile.villageId, requestId });
+      triggerSuccessHaptic();
+      showSuccess('Commitment cancelled');
+    } catch (error: any) {
+      showError(error.message || 'Failed to unclaim');
+    } finally {
+      setIsMutating(null);
+    }
   };
 
   const openChat = (item: any, isHelper: boolean) => {
@@ -286,57 +304,82 @@ export default function MyItemsScreen({ profile }: Props) {
   };
 
   const handleAddToCalendar = async (item: any) => {
-    try {
-      const { status } = await Calendar.requestCalendarPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Calendar access is needed to add events.');
-        return;
-      }
+    const [year, month, day] = item.date.split('-').map(Number);
+    const timeMatch = item.time.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+    let hours = 9;
+    let minutes = 0;
 
-      const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-      const writableCalendars = calendars.filter(
-        (cal: any) => cal.allowsModifications && cal.source.name !== 'Birthdays'
-      );
+    if (timeMatch) {
+      hours = parseInt(timeMatch[1], 10);
+      minutes = parseInt(timeMatch[2] || '0', 10);
+      const meridiem = timeMatch[3]?.toUpperCase();
+      if (meridiem === 'PM' && hours < 12) hours += 12;
+      if (meridiem === 'AM' && hours === 12) hours = 0;
+    }
 
-      if (writableCalendars.length === 0) {
-        Alert.alert('No Calendar', 'No writable calendar found on this device.');
-        return;
-      }
+    const startDate = new Date(year, month - 1, day, hours, minutes);
+    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
 
-      const defaultCal =
-        writableCalendars.find((c: any) => c.isPrimary) ||
-        writableCalendars.find((c: any) => c.source.name === 'iCloud') ||
-        writableCalendars[0];
-
-      const [year, month, day] = item.date.split('-').map(Number);
-      const timeMatch = item.time.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
-      let hours = 9;
-      let minutes = 0;
-
-      if (timeMatch) {
-        hours = parseInt(timeMatch[1], 10);
-        minutes = parseInt(timeMatch[2] || '0', 10);
-        const meridiem = timeMatch[3]?.toUpperCase();
-        if (meridiem === 'PM' && hours < 12) hours += 12;
-        if (meridiem === 'AM' && hours === 12) hours = 0;
-      }
-
-      const startDate = new Date(year, month - 1, day, hours, minutes);
-      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-
-      await Calendar.createEventAsync(defaultCal.id, {
-        title: `Village: ${item.title}`,
-        notes: item.description,
+    if (Platform.OS === 'web') {
+      const googleCalendarUrl = generateGoogleCalendarUrl(
+        item.title,
+        item.description,
         startDate,
         endDate,
-        alarms: [{ relativeOffset: -30 }],
-      });
+      );
+      window.open(googleCalendarUrl, '_blank');
+      showSuccess('Event opened in Google Calendar!');
+    } else {
+      try {
+        const { status } = await Calendar.requestCalendarPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Calendar access is needed to add events.');
+          return;
+        }
 
-      showSuccess('Event added to your calendar!');
-    } catch (error: any) {
-      console.error(error);
-      showError('Could not add to calendar.');
+        const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+        const writableCalendars = calendars.filter(
+          (cal: any) => cal.allowsModifications && cal.source.name !== 'Birthdays'
+        );
+
+        if (writableCalendars.length === 0) {
+          Alert.alert('No Calendar', 'No writable calendar found on this device.');
+          return;
+        }
+
+        const defaultCal =
+          writableCalendars.find((c: any) => c.isPrimary) ||
+          writableCalendars.find((c: any) => c.source.name === 'iCloud') ||
+          writableCalendars[0];
+
+        await Calendar.createEventAsync(defaultCal.id, {
+          title: `Village: ${item.title}`,
+          notes: item.description,
+          startDate,
+          endDate,
+          alarms: [{ relativeOffset: -30 }],
+        });
+
+        showSuccess('Event added to your calendar!');
+      } catch (error: any) {
+        console.error(error);
+        showError('Could not add to calendar.');
+      }
     }
+  };
+
+  const generateGoogleCalendarUrl = (title: string, description: string, startDate: Date, endDate: Date) => {
+    const formatDateTime = (date: Date) => date.toISOString().replace(/[-:]|\.\d{3}/g, '').substring(0, 15) + 'Z';
+
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: title,
+      dates: `${formatDateTime(startDate)}/${formatDateTime(endDate)}`,
+      details: description,
+      sf: 'true',
+      output: 'xml',
+    });
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
   };
 
   const formatDate = (dateStr: string) => {
@@ -372,28 +415,40 @@ export default function MyItemsScreen({ profile }: Props) {
 
       {item.claimedByName && (
         <View style={styles.helperInfo}>
-          <Ionicons name="person-circle" size={20} color={theme.colors.status.claimed} />
+          <Avatar name={item.claimedByName} uri={item.claimedByPhotoUrl} size={24} />
           <Text style={styles.helperText}>{item.claimedByName} is helping!</Text>
         </View>
       )}
 
       {item.status === 'open' && (
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDelete(item.id)}
-          disabled={isMutating === item.id}
-          accessibilityRole="button"
-          accessibilityLabel={`Delete request titled ${item.title}`}
-        >
-          {isMutating === item.id ? (
-            <ActivityIndicator color={theme.colors.accent} />
-          ) : (
-            <>
-              <Ionicons name="trash-outline" size={18} color={theme.colors.accent} />
-              <Text style={styles.deleteText}>Delete</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('CreateRequest', { request: item })}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit request titled ${item.title}`}
+          >
+            <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
+            <Text style={styles.actionButtonText}>Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: theme.colors.errorLight }]}
+            onPress={() => handleDelete(item.id)}
+            disabled={isMutating === item.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete request titled ${item.title}`}
+          >
+            {isMutating === item.id ? (
+              <ActivityIndicator color={theme.colors.accent} />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={18} color={theme.colors.accent} />
+                <Text style={[styles.actionButtonText, { color: theme.colors.accent }]}>Delete</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       )}
 
       {item.status === 'claimed' && (
@@ -425,7 +480,7 @@ export default function MyItemsScreen({ profile }: Props) {
       <Text style={styles.cardDescription}>{item.description}</Text>
 
       <View style={styles.helperInfo}>
-        <Ionicons name="person-circle" size={20} color={theme.colors.primary} />
+        <Avatar name={item.createdByName} uri={item.createdByPhotoUrl} size={24} />
         <Text style={styles.helperText}>Helping {item.createdByName}</Text>
       </View>
 
@@ -491,6 +546,8 @@ export default function MyItemsScreen({ profile }: Props) {
           removeClippedSubviews={true}
           maxToRenderPerBatch={5}
           windowSize={10}
+          initialNumToRender={3}
+          legacyImplementation={false}
         />
       ) : (
         <FlatList
@@ -524,6 +581,7 @@ export default function MyItemsScreen({ profile }: Props) {
           maxToRenderPerBatch={5}
           windowSize={10}
           initialNumToRender={5}
+          legacyImplementation={false}
         />
       )}
     </SafeAreaView>
