@@ -311,7 +311,11 @@ Open the app → Sign up → Enter this invite code to join.`;
           {/* Status Banner for Pending Users */}
           {profile.status === 'pending' && (
             <View style={styles.pendingBanner}>
+              <Ionicons name="information-circle-outline" size={16} color="#c2410c" style={{ marginBottom: 4 }} />
               <Text style={styles.pendingText}>Status: Pending Approval</Text>
+              <Text style={styles.pendingSubtext}>
+                A Parent in this village needs to approve your account before you can see help requests.
+              </Text>
             </View>
           )}
         </View>
@@ -589,8 +593,8 @@ const styles = StyleSheet.create({
   },
   roleText: {
     fontSize: 14,
-    color: theme.colors.white,
-    fontWeight: '500',
+    color: theme.colors.text.primary,
+    fontWeight: '600',
   },
   villageSection: {
     marginBottom: 24,
@@ -729,7 +733,14 @@ const styles = StyleSheet.create({
   pendingText: {
     color: '#c2410c',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  pendingSubtext: {
+    color: '#9a3412',
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
   },
   approvalSection: {
     marginBottom: 24,
