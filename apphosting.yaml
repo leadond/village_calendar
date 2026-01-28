@@ -23,9 +23,4 @@ env:
 # Build and Run Scripts
 scripts:
   buildCommand: npm run build
-  runCommand: npx serve -s dist -l $PORT
-
-# Include the dist folder in the deployment output
-outputFiles:
-  serverApp:
-    include: [dist]
+  runCommand: npm run serve:web
