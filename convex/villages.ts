@@ -11,11 +11,19 @@ function generateCode(): string {
 }
 
 export const createVillage = mutation({
-  args: { name: v.string() },
+  args: {
+    name: v.string(),
+    role: v.optional(v.union(v.literal("parent"), v.literal("helper")))
+  },
   returns: v.id("villages"),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+
+    // Safety: Only parents (or those intending to be parents) can create villages
+    if (args.role === "helper") {
+      throw new Error("Helpers cannot create new villages. Please join an existing one.");
+    }
 
     // Generate unique code
     let code = generateCode();

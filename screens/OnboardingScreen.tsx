@@ -79,7 +79,10 @@ export default function OnboardingScreen({ route }: Props) {
           setSaving(false);
           return;
         }
-        villageId = await createVillage({ name: villageName.trim() });
+        villageId = await createVillage({
+          name: villageName.trim(),
+          role: role // Pass role for backend validation
+        });
       } else {
         if (!invitePreview) {
           Alert.alert('Error', 'Please enter a valid invite code');
@@ -205,17 +208,19 @@ export default function OnboardingScreen({ route }: Props) {
             <Text style={styles.optionSubtext}>Enter an invite code</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.optionCard}
-            onPress={() => setVillageMode('create')}
-            accessibilityRole="button"
-            accessibilityLabel="Create a new village"
-            accessibilityHint="Navigates to the screen to create a new village"
-          >
-            <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
-            <Text style={styles.optionText}>Create a new village</Text>
-            <Text style={styles.optionSubtext}>Start your own community</Text>
-          </TouchableOpacity>
+          {role === 'parent' && (
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => setVillageMode('create')}
+              accessibilityRole="button"
+              accessibilityLabel="Create a new village"
+              accessibilityHint="Navigates to the screen to create a new village"
+            >
+              <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
+              <Text style={styles.optionText}>Create a new village</Text>
+              <Text style={styles.optionSubtext}>Start your own community</Text>
+            </TouchableOpacity>
+          )}
         </>
       ) : villageMode === 'join' ? (
         <>
