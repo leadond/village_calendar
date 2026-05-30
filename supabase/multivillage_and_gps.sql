@@ -1,0 +1,30 @@
+-- Multi-village isolation + GPS realtime (applied 2026-05-30)
+-- See Supabase migration history for exact ordering. Summary:
+--
+-- MULTI-VILLAGE:
+--  * user_villages(user_id, village_id, role user_role, status) is the
+--    membership source of truth; unique(user_id, village_id).
+--  * profiles.current_village_id = the ACTIVE village. current_village_id()
+--    helper was redefined to return it, so every existing village RLS policy
+--    now scopes to the active village => full per-village isolation.
+--  * Helpers: is_member(village), is_active_admin().
+--  * RPCs: create_village, switch_active_village, my_villages,
+--    active_village_members, and join-approval rewritten to write per-village
+--    membership (request_to_join_village / approve_join_request /
+--    reject_join_request / pending_join_requests).
+--  * Backfilled memberships from profiles.village_id + villages.admin_id.
+--
+-- GPS:
+--  * gps_breadcrumbs added to supabase_realtime publication.
+--  * purge_old_breadcrumbs() deletes rows older than 7 days (schedule via
+--    pg_cron when ready).
+--
+-- The authoritative, runnable copies live in Supabase migrations:
+--   multivillage_membership_foundation, multivillage_rpcs,
+--   help_request_claim_and_realtime, gps_realtime_and_purge.
+
+-- Key isolation helper (re-scopes all village policies to the active village):
+-- create or replace function public.current_village_id()
+-- returns uuid language sql stable security definer set search_path = public as $$
+--   select current_village_id from public.profiles where id = auth.uid()
+-- $$;
