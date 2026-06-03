@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/providers.dart';
+import '../subscriptions/paywall_screen.dart';
 
 /// Reachable any time (not just onboarding) so a member can request to join
 /// additional villages. Membership stays pending until that village's admin
@@ -30,6 +31,18 @@ class _JoinVillageScreenState extends ConsumerState<JoinVillageScreen> {
       setState(() => _message = 'Enter an invite code.');
       return;
     }
+
+    // Free tier = one village. Joining additional villages needs Premium.
+    final villageCount = ref.read(myVillagesProvider).value?.length ?? 0;
+    if (villageCount >= 1 && !ref.read(isPremiumProvider)) {
+      final upgraded = await requirePremium(context, ref);
+      if (!upgraded) {
+        setState(() => _message =
+            'Premium is required to belong to more than one village.');
+        return;
+      }
+    }
+
     setState(() {
       _busy = true;
       _message = null;

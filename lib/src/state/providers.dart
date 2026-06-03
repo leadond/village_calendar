@@ -1,17 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/app_notification.dart';
 import '../models/breadcrumb.dart';
+import '../models/emergency_alert.dart';
 import '../models/help_request.dart';
 import '../models/join_request.dart';
 import '../models/kid_profile.dart';
 import '../models/message.dart';
 import '../models/profile.dart';
 import '../models/village.dart';
+import '../repositories/emergency_repository.dart';
 import '../repositories/gps_repository.dart';
 import '../repositories/help_request_repository.dart';
 import '../repositories/kid_repository.dart';
 import '../repositories/message_repository.dart';
+import '../repositories/notification_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../repositories/village_repository.dart';
 import '../services/location_service.dart';
@@ -133,6 +137,49 @@ final gpsRepositoryProvider = Provider<GpsRepository>((ref) {
 final breadcrumbsStreamProvider =
     StreamProvider.family<List<Breadcrumb>, String>((ref, requestId) {
   return ref.watch(gpsRepositoryProvider).stream(requestId);
+});
+
+// ---- M7 notifications ------------------------------------------------------
+final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
+  return NotificationRepository(ref.watch(supabaseClientProvider));
+});
+
+final notificationsStreamProvider =
+    StreamProvider<List<AppNotification>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return Stream.value(const <AppNotification>[]);
+  return ref.watch(notificationRepositoryProvider).stream(user.id);
+});
+
+final unreadCountProvider = Provider<int>((ref) {
+  final list = ref.watch(notificationsStreamProvider).value ?? const [];
+  return list.where((n) => n.isUnread).length;
+});
+
+// ---- M8 emergency ----------------------------------------------------------
+final emergencyRepositoryProvider = Provider<EmergencyRepository>((ref) {
+  return EmergencyRepository(ref.watch(supabaseClientProvider));
+});
+
+final emergencyAlertsStreamProvider =
+    StreamProvider<List<EmergencyAlert>>((ref) {
+  final profile = ref.watch(currentProfileProvider).value;
+  if (profile == null || !profile.hasVillage) {
+    return Stream.value(const <EmergencyAlert>[]);
+  }
+  return ref.watch(emergencyRepositoryProvider).stream(profile.villageId!);
+});
+
+final activeEmergencyCountProvider = Provider<int>((ref) {
+  final list = ref.watch(emergencyAlertsStreamProvider).value ?? const [];
+  return list.where((a) => a.isActive).length;
+});
+
+// ---- M9 subscriptions ------------------------------------------------------
+/// Premium = any paid tier. Server-verified via RevenueCat webhook in prod.
+final isPremiumProvider = Provider<bool>((ref) {
+  final tier = ref.watch(currentProfileProvider).value?.subscriptionTier ?? 'free';
+  return tier != 'free' && tier.isNotEmpty;
 });
 
 /// The signed-in user's profile (null when signed out).

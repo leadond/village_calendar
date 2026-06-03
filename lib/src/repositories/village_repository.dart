@@ -113,4 +113,20 @@ class VillageRepository {
   Future<void> cancelMyJoin(String requestId) async {
     await _client.from('village_join_requests').delete().eq('id', requestId);
   }
+
+  // ---- admin (active village) ----
+  Future<void> setMemberRole(String userId, String role) async {
+    await _client.rpc('set_member_role',
+        params: {'p_user': userId, 'p_role': role});
+  }
+
+  Future<void> removeMember(String userId) async {
+    await _client.rpc('remove_member', params: {'p_user': userId});
+  }
+
+  Future<List<Map<String, dynamic>>> activeVillageAudit() async {
+    final res = await _client.rpc('active_village_audit');
+    final list = (res as List?) ?? const [];
+    return list.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
 }

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/help_request.dart';
 import '../../state/providers.dart';
+import '../subscriptions/paywall_screen.dart';
 
 /// Helper-side control to share live location during an active trip. Only
 /// streams while the toggle is on and the tab is open (foreground web).
@@ -35,6 +36,12 @@ class _HelperLiveShareState extends ConsumerState<HelperLiveShare> {
       await _sub?.cancel();
       _sub = null;
       setState(() => _sharing = false);
+      return;
+    }
+
+    // Live GPS sharing is a Premium feature.
+    if (!await requirePremium(context, ref)) {
+      setState(() => _error = 'Live location sharing requires Premium.');
       return;
     }
 

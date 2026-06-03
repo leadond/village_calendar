@@ -6,9 +6,15 @@ import '../../models/profile.dart';
 import '../../models/village.dart';
 import '../../services/setup_services.dart';
 import '../../state/providers.dart';
+import '../admin/admin_screen.dart';
+import '../emergency/emergency_screen.dart';
 import '../kids/kids_tab.dart';
+import '../legal/legal_screens.dart';
 import '../messages/messages_screen.dart';
+import '../notifications/notification_center.dart';
+import '../notifications/notification_settings_screen.dart';
 import '../requests/requests_tab.dart';
+import '../subscriptions/paywall_screen.dart';
 import '../village/join_village_screen.dart';
 
 /// Role-aware app shell shown once the user is signed in and in a village.
@@ -23,6 +29,18 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Persist the FCM token (if Firebase messaging produced one) so the backend
+    // can push to this user. No-op until messaging is configured.
+    final token = ref.read(setupStatusProvider).firebaseMessagingToken;
+    final uid = ref.read(currentUserProvider)?.id;
+    if (token != null && token.isNotEmpty && uid != null) {
+      ref.read(notificationRepositoryProvider).savePushToken(uid, token);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +111,12 @@ class _HomeTab extends ConsumerWidget {
               MaterialPageRoute(builder: (_) => const ThreadsScreen()),
             ),
           ),
+          _NotificationBell(
+            count: ref.watch(unreadCountProvider),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotificationCenterScreen()),
+            ),
+          ),
           const VillageSwitcherAction(),
         ],
       ),
@@ -105,6 +129,7 @@ class _HomeTab extends ConsumerWidget {
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
+          const _EmergencyBanner(),
           villageAsync.when(
             loading: () => const Card(
               child: ListTile(
@@ -447,13 +472,138 @@ class _ProfileTab extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          if (!ref.watch(isPremiumProvider))
+            Card(
+              color: theme.colorScheme.tertiaryContainer,
+              child: ListTile(
+                leading: const Icon(Icons.workspace_premium),
+                title: const Text('Upgrade to Premium'),
+                subtitle: const Text('Multiple villages, live GPS, carpool automation'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                ),
+              ),
+            ),
+          Card(
+            child: Column(
+              children: [
+                if (ref.watch(activeRoleProvider) == UserRole.admin)
+                  ListTile(
+                    leading: const Icon(Icons.admin_panel_settings_outlined),
+                    title: const Text('Manage village'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AdminScreen()),
+                    ),
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.notifications_outlined),
+                  title: const Text('Notification settings'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const NotificationSettingsScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Terms of Service'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const LegalScreen(
+                        title: 'Terms of Service', body: kTermsText),
+                  )),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('Privacy Policy'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const LegalScreen(
+                        title: 'Privacy Policy', body: kPrivacyText),
+                  )),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: () => _signOut(context),
             icon: const Icon(Icons.logout),
             label: const Text('Sign out'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _NotificationBell extends StatelessWidget {
+  const _NotificationBell({required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          tooltip: 'Notifications',
+          icon: const Icon(Icons.notifications_none),
+          onPressed: onTap,
+        ),
+        if (count > 0)
+          Positioned(
+            right: 6,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                  color: Colors.red, shape: BoxShape.circle),
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+              child: Text(
+                count > 9 ? '9+' : '$count',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 9),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _EmergencyBanner extends ConsumerWidget {
+  const _EmergencyBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final active = ref.watch(activeEmergencyCountProvider);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: active > 0 ? Colors.red.shade50 : null,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: active > 0
+                ? Colors.red
+                : Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+        child: ListTile(
+          leading: Icon(Icons.sos, color: active > 0 ? Colors.red : null),
+          title: Text(active > 0
+              ? '$active active emergency alert${active == 1 ? '' : 's'}'
+              : 'Emergency'),
+          subtitle: const Text('Send or view village SOS alerts'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const EmergencyScreen()),
+          ),
+        ),
       ),
     );
   }
