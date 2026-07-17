@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/app_notification.dart';
+import '../models/availability_block.dart';
 import '../models/breadcrumb.dart';
+import '../models/direct_message.dart';
 import '../models/emergency_alert.dart';
 import '../models/help_request.dart';
 import '../models/join_request.dart';
@@ -10,6 +12,9 @@ import '../models/kid_profile.dart';
 import '../models/message.dart';
 import '../models/profile.dart';
 import '../models/village.dart';
+import '../repositories/announcement_repository.dart';
+import '../repositories/availability_repository.dart';
+import '../repositories/direct_message_repository.dart';
 import '../repositories/emergency_repository.dart';
 import '../repositories/gps_repository.dart';
 import '../repositories/help_request_repository.dart';
@@ -88,6 +93,15 @@ final myClaimedProvider = FutureProvider<List<HelpRequest>>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const <HelpRequest>[];
   return ref.watch(helpRequestRepositoryProvider).claimedByMe(user.id);
+});
+
+/// The signed-in parent's draft (auto-generated, unpublished) requests.
+final myDraftsProvider = FutureProvider<List<HelpRequest>>((ref) async {
+  final profile = await ref.watch(currentProfileProvider.future);
+  if (profile == null || !profile.hasVillage) return const <HelpRequest>[];
+  return ref
+      .watch(helpRequestRepositoryProvider)
+      .myDrafts(profile.villageId!, profile.id);
 });
 
 /// id -> display name for the current village members (for showing who
@@ -180,6 +194,77 @@ final activeEmergencyCountProvider = Provider<int>((ref) {
 final isPremiumProvider = Provider<bool>((ref) {
   final tier = ref.watch(currentProfileProvider).value?.subscriptionTier ?? 'free';
   return tier != 'free' && tier.isNotEmpty;
+});
+
+// ---- Direct messages + broadcasts ------------------------------------------
+final directMessageRepositoryProvider =
+    Provider<DirectMessageRepository>((ref) {
+  return DirectMessageRepository(ref.watch(supabaseClientProvider));
+});
+
+final announcementRepositoryProvider = Provider<AnnouncementRepository>((ref) {
+  return AnnouncementRepository(ref.watch(supabaseClientProvider));
+});
+
+/// All of the user's direct messages in the active village (one subscription;
+/// UI derives conversations + threads from it).
+final directMessagesProvider = StreamProvider<List<DirectMessage>>((ref) {
+  final profile = ref.watch(currentProfileProvider).value;
+  if (profile == null || !profile.hasVillage) {
+    return Stream.value(const <DirectMessage>[]);
+  }
+  return ref.watch(directMessageRepositoryProvider).streamAll(profile.villageId!);
+});
+
+/// Unread direct-message count (messages sent to me, not yet read).
+final unreadDirectCountProvider = Provider<int>((ref) {
+  final me = ref.watch(currentUserProvider)?.id;
+  final msgs = ref.watch(directMessagesProvider).value ?? const [];
+  return msgs.where((m) => m.recipientId == me && m.readAt == null).length;
+});
+
+final announcementsProvider = StreamProvider<List<Announcement>>((ref) {
+  final profile = ref.watch(currentProfileProvider).value;
+  if (profile == null || !profile.hasVillage) {
+    return Stream.value(const <Announcement>[]);
+  }
+  return ref.watch(announcementRepositoryProvider).stream(profile.villageId!);
+});
+
+// ---- Availability + calendar -----------------------------------------------
+final availabilityRepositoryProvider = Provider<AvailabilityRepository>((ref) {
+  return AvailabilityRepository(ref.watch(supabaseClientProvider));
+});
+
+/// The signed-in user's own availability/work blocks.
+final myAvailabilityProvider = FutureProvider<List<AvailabilityBlock>>((ref) async {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return const <AvailabilityBlock>[];
+  return ref.watch(availabilityRepositoryProvider).forUser(user.id);
+});
+
+/// Everyone's availability/work blocks in the active village (for the calendar).
+final villageAvailabilityProvider =
+    FutureProvider<List<AvailabilityBlock>>((ref) async {
+  final profile = await ref.watch(currentProfileProvider.future);
+  if (profile == null || !profile.hasVillage) {
+    return const <AvailabilityBlock>[];
+  }
+  return ref.watch(availabilityRepositoryProvider).forVillage(profile.villageId!);
+});
+
+/// Non-draft requests for a given week (Monday-anchored) in the active village.
+final weekRequestsProvider =
+    FutureProvider.family<List<HelpRequest>, DateTime>((ref, weekStart) async {
+  final profile = await ref.watch(currentProfileProvider.future);
+  if (profile == null || !profile.hasVillage) return const <HelpRequest>[];
+  final start = DateTime(weekStart.year, weekStart.month, weekStart.day);
+  final end = start.add(const Duration(days: 7));
+  return ref.watch(helpRequestRepositoryProvider).inRange(
+        profile.villageId!,
+        start.toUtc().toIso8601String(),
+        end.toUtc().toIso8601String(),
+      );
 });
 
 /// The signed-in user's profile (null when signed out).

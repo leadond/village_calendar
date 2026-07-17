@@ -67,6 +67,24 @@ class HelpRequestRepository {
     return _map(rows);
   }
 
+  /// All non-draft requests scheduled within [startIso, endIso) in the village
+  /// (for the shared calendar).
+  Future<List<HelpRequest>> inRange(
+    String villageId,
+    String startIso,
+    String endIso,
+  ) async {
+    final rows = await _client
+        .from('help_requests')
+        .select(_columns)
+        .eq('village_id', villageId)
+        .eq('is_draft', false)
+        .gte('scheduled_start', startIso)
+        .lt('scheduled_start', endIso)
+        .order('scheduled_start', ascending: true);
+    return _map(rows);
+  }
+
   Future<HelpRequest> fetch(String id) async {
     final row = await _client
         .from('help_requests')
@@ -74,6 +92,65 @@ class HelpRequestRepository {
         .eq('id', id)
         .single();
     return HelpRequest.fromMap(Map<String, dynamic>.from(row));
+  }
+
+  // --- drafts / auto-generation ---------------------------------------------
+
+  /// Inserts an auto-generated draft (not visible to helpers until published).
+  Future<void> createDraft({
+    required String villageId,
+    required String creatorId,
+    required String title,
+    required HelpCategory category,
+    required DateTime start,
+    required DateTime end,
+    List<String> kidIds = const [],
+    String? description,
+  }) async {
+    await _client.from('help_requests').insert({
+      'village_id': villageId,
+      'creator_id': creatorId,
+      'title': title,
+      'category': category.value,
+      'request_type': category.legacyRequestType,
+      'status': 'open',
+      'is_draft': true,
+      'auto_generated': true,
+      'scheduled_at': start.toUtc().toIso8601String(),
+      'scheduled_start': start.toUtc().toIso8601String(),
+      'scheduled_end': end.toUtc().toIso8601String(),
+      'kid_ids': kidIds,
+      'description': description,
+    });
+  }
+
+  /// The creator's draft requests (pending review).
+  Future<List<HelpRequest>> myDrafts(String villageId, String userId) async {
+    final rows = await _client
+        .from('help_requests')
+        .select(_columns)
+        .eq('creator_id', userId)
+        .eq('village_id', villageId)
+        .eq('is_draft', true)
+        .order('scheduled_start', ascending: true);
+    return _map(rows);
+  }
+
+  /// Publishes a draft -> visible to helpers + triggers availability-aware notify.
+  Future<void> publishDraft(String id) async {
+    await _client.from('help_requests').update({'is_draft': false}).eq('id', id);
+  }
+
+  Future<void> updateSchedule(String id, DateTime start, DateTime end) async {
+    await _client.from('help_requests').update({
+      'scheduled_at': start.toUtc().toIso8601String(),
+      'scheduled_start': start.toUtc().toIso8601String(),
+      'scheduled_end': end.toUtc().toIso8601String(),
+    }).eq('id', id);
+  }
+
+  Future<void> deleteRequest(String id) async {
+    await _client.from('help_requests').delete().eq('id', id);
   }
 
   // --- lifecycle ------------------------------------------------------------

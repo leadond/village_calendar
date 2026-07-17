@@ -16,6 +16,9 @@ class KidProfile {
     this.allergies = const [],
     this.medicalNotes,
     this.notes,
+    this.careStartMinutes,
+    this.careEndMinutes,
+    this.careWeekdays = const [1, 2, 3, 4, 5],
   });
 
   final String id;
@@ -30,6 +33,15 @@ class KidProfile {
   final List<String> allergies;
   final String? medicalNotes;
   final String? notes;
+
+  /// School/daycare window (minutes from midnight) + weekdays (1=Mon..7=Sun,
+  /// matching DateTime.weekday). Used to auto-generate coverage requests.
+  final int? careStartMinutes;
+  final int? careEndMinutes;
+  final List<int> careWeekdays;
+
+  bool get hasCareWindow =>
+      careStartMinutes != null && careEndMinutes != null;
 
   int? get ageYears {
     if (dateOfBirth == null) return null;
@@ -52,6 +64,14 @@ class KidProfile {
       }
     }
 
+    final weekdaysRaw = map['care_weekdays'];
+    final careWeekdays = <int>[];
+    if (weekdaysRaw is List) {
+      for (final w in weekdaysRaw) {
+        if (w is int) careWeekdays.add(w);
+      }
+    }
+
     return KidProfile(
       id: map['id'] as String,
       parentId: map['parent_id'] as String,
@@ -65,7 +85,19 @@ class KidProfile {
       allergies: allergies,
       medicalNotes: map['medical_notes'] as String?,
       notes: map['notes'] as String?,
+      careStartMinutes: _parseTime(map['care_start_time'] as String?),
+      careEndMinutes: _parseTime(map['care_end_time'] as String?),
+      careWeekdays:
+          careWeekdays.isEmpty ? const [1, 2, 3, 4, 5] : careWeekdays,
     );
+  }
+
+  static int? _parseTime(String? t) {
+    if (t == null || t.isEmpty) return null;
+    final parts = t.split(':');
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    return h * 60 + m;
   }
 }
 
@@ -81,6 +113,9 @@ class KidDraft {
     this.allergies = const [],
     this.medicalNotes,
     this.notes,
+    this.careStartMinutes,
+    this.careEndMinutes,
+    this.careWeekdays = const [1, 2, 3, 4, 5],
   });
 
   String name;
@@ -92,6 +127,9 @@ class KidDraft {
   List<String> allergies;
   String? medicalNotes;
   String? notes;
+  int? careStartMinutes;
+  int? careEndMinutes;
+  List<int> careWeekdays;
 
   /// Column map written to Supabase. Mirrors legacy + V2 columns.
   Map<String, dynamic> toColumns() {
@@ -112,9 +150,16 @@ class KidDraft {
       'allergies': allergies,
       'medical_notes': _nz(medicalNotes),
       'notes': _nz(notes),
+      'care_start_time': _fmtMins(careStartMinutes),
+      'care_end_time': _fmtMins(careEndMinutes),
+      'care_weekdays': careWeekdays,
     };
   }
 
   static String? _nz(String? v) =>
       (v == null || v.trim().isEmpty) ? null : v.trim();
+
+  static String? _fmtMins(int? mins) => mins == null
+      ? null
+      : '${(mins ~/ 60).toString().padLeft(2, '0')}:${(mins % 60).toString().padLeft(2, '0')}';
 }

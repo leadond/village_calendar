@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/help_request.dart';
 import '../../state/providers.dart';
+import 'care_scheduler.dart';
 import 'create_request_screen.dart';
 import 'request_detail_screen.dart';
 
@@ -23,6 +24,13 @@ class _RequestsTabState extends ConsumerState<RequestsTab> {
       appBar: AppBar(
         title: const Text('Requests'),
         actions: [
+          IconButton(
+            tooltip: 'Auto-schedule from work hours',
+            icon: const Icon(Icons.auto_awesome),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DraftsReviewScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),

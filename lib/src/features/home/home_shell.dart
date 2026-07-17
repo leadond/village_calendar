@@ -7,10 +7,12 @@ import '../../models/village.dart';
 import '../../services/setup_services.dart';
 import '../../state/providers.dart';
 import '../admin/admin_screen.dart';
+import '../calendar/availability_screen.dart';
+import '../calendar/calendar_screen.dart';
 import '../emergency/emergency_screen.dart';
 import '../kids/kids_tab.dart';
 import '../legal/legal_screens.dart';
-import '../messages/messages_screen.dart';
+import '../messages/messages_hub.dart';
 import '../notifications/notification_center.dart';
 import '../notifications/notification_settings_screen.dart';
 import '../requests/requests_tab.dart';
@@ -105,10 +107,18 @@ class _HomeTab extends ConsumerWidget {
         title: const Text('Home'),
         actions: [
           IconButton(
-            tooltip: 'Messages',
-            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: 'Calendar',
+            icon: const Icon(Icons.calendar_month),
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ThreadsScreen()),
+              MaterialPageRoute(builder: (_) => const CalendarScreen()),
+            ),
+          ),
+          _NotificationBell(
+            icon: Icons.chat_bubble_outline,
+            tooltip: 'Messages',
+            count: ref.watch(unreadDirectCountProvider),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MessagesHub()),
             ),
           ),
           _NotificationBell(
@@ -498,6 +508,15 @@ class _ProfileTab extends ConsumerWidget {
                     ),
                   ),
                 ListTile(
+                  leading: const Icon(Icons.event_available_outlined),
+                  title: const Text('My schedule / availability'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const AvailabilityScreen()),
+                  ),
+                ),
+                ListTile(
                   leading: const Icon(Icons.notifications_outlined),
                   title: const Text('Notification settings'),
                   trailing: const Icon(Icons.chevron_right),
@@ -540,9 +559,16 @@ class _ProfileTab extends ConsumerWidget {
 }
 
 class _NotificationBell extends StatelessWidget {
-  const _NotificationBell({required this.count, required this.onTap});
+  const _NotificationBell({
+    required this.count,
+    required this.onTap,
+    this.icon = Icons.notifications_none,
+    this.tooltip = 'Notifications',
+  });
   final int count;
   final VoidCallback onTap;
+  final IconData icon;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -550,8 +576,8 @@ class _NotificationBell extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         IconButton(
-          tooltip: 'Notifications',
-          icon: const Icon(Icons.notifications_none),
+          tooltip: tooltip,
+          icon: Icon(icon),
           onPressed: onTap,
         ),
         if (count > 0)

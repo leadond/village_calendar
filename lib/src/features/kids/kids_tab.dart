@@ -139,7 +139,14 @@ class _KidEditScreenState extends ConsumerState<KidEditScreen> {
   String _newPhotoExt = 'jpg';
   bool _busy = false;
 
+  TimeOfDay? _careStart;
+  TimeOfDay? _careEnd;
+  Set<int> _careWeekdays = {1, 2, 3, 4, 5}; // 1=Mon..7=Sun
+
   bool get _isEdit => widget.kid != null;
+
+  static TimeOfDay? _todFromMinutes(int? m) =>
+      m == null ? null : TimeOfDay(hour: m ~/ 60, minute: m % 60);
 
   @override
   void initState() {
@@ -155,6 +162,9 @@ class _KidEditScreenState extends ConsumerState<KidEditScreen> {
       _notes.text = k.notes ?? '';
       _dob = k.dateOfBirth;
       _existingPhotoUrl = k.photoUrl;
+      _careStart = _todFromMinutes(k.careStartMinutes);
+      _careEnd = _todFromMinutes(k.careEndMinutes);
+      if (k.careWeekdays.isNotEmpty) _careWeekdays = k.careWeekdays.toSet();
     }
   }
 
@@ -227,6 +237,11 @@ class _KidEditScreenState extends ConsumerState<KidEditScreen> {
             .toList(),
         medicalNotes: _medical.text,
         notes: _notes.text,
+        careStartMinutes:
+            _careStart == null ? null : _careStart!.hour * 60 + _careStart!.minute,
+        careEndMinutes:
+            _careEnd == null ? null : _careEnd!.hour * 60 + _careEnd!.minute,
+        careWeekdays: _careWeekdays.toList()..sort(),
       );
 
       if (_isEdit) {
@@ -312,6 +327,77 @@ class _KidEditScreenState extends ConsumerState<KidEditScreen> {
             _field(_medical, 'Medical notes', Icons.medical_information_outlined,
                 lines: 2),
             _field(_notes, 'Other notes', Icons.notes, lines: 2),
+            const SizedBox(height: 8),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('School / daycare hours',
+                  style: Theme.of(context).textTheme.titleSmall),
+            ),
+            const Text(
+              'Used to auto-create sitter requests for the gaps around your '
+              'work schedule.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.login, size: 18),
+                    label: Text(_careStart == null
+                        ? 'Drop-off / opens'
+                        : 'Opens ${_careStart!.format(context)}'),
+                    onPressed: () async {
+                      final t = await showTimePicker(
+                        context: context,
+                        initialTime: _careStart ??
+                            const TimeOfDay(hour: 8, minute: 0),
+                        helpText: 'School/daycare opens',
+                      );
+                      if (t != null) setState(() => _careStart = t);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: Text(_careEnd == null
+                        ? 'Pickup / ends'
+                        : 'Ends ${_careEnd!.format(context)}'),
+                    onPressed: () async {
+                      final t = await showTimePicker(
+                        context: context,
+                        initialTime:
+                            _careEnd ?? const TimeOfDay(hour: 15, minute: 0),
+                        helpText: 'School/daycare ends',
+                      );
+                      if (t != null) setState(() => _careEnd = t);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (var wd = 1; wd <= 7; wd++)
+                  FilterChip(
+                    label: Text(const ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri',
+                        'Sat', 'Sun'][wd]),
+                    selected: _careWeekdays.contains(wd),
+                    onSelected: (sel) => setState(() {
+                      if (sel) {
+                        _careWeekdays.add(wd);
+                      } else {
+                        _careWeekdays.remove(wd);
+                      }
+                    }),
+                  ),
+              ],
+            ),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: _busy ? null : _save,
