@@ -53,8 +53,19 @@ class _AuthenticationScreenState extends State<AuthenticationScreen> {
         }
 
         if (response.session == null) {
-          _showMessage('Account created. Check your email to confirm it.');
-          return;
+          // Email confirmation is disabled server-side (accounts are
+          // auto-confirmed), so sign in immediately after signup.
+          final signIn = await supabase.auth.signInWithPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          );
+          if (!mounted) {
+            return;
+          }
+          if (signIn.session == null) {
+            _showMessage('Account created. Please sign in.');
+            return;
+          }
         }
       } else {
         final response = await supabase.auth.signInWithPassword(
