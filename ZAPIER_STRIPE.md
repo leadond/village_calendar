@@ -28,13 +28,20 @@ supabase secrets set ZAPIER_GRANT_SECRET='<a long random string>'
 ```
 To downgrade on cancellation, POST the same with `"tier": "free"`.
 
-### Passing the user into the form
-Open the Zapier form from the app's Upgrade button with the signed-in user
-prefilled, so the Zap knows who to upgrade:
+### Matching the user — use EMAIL (recommended)
+Zapier forms can't reliably pre-fill hidden fields from the URL, and users don't
+know their Supabase UUID — so **match by email** instead. Make **Email a visible,
+required field** on the form; the Zap passes it to `grant-premium`, which looks
+up the profile by email. The one rule for the customer: use the **same email as
+your Village Calendar login**.
+
+The app's Upgrade button just opens the form URL (optionally append
+`?email=<EMAIL>` — some Interfaces will pre-fill a matching visible field):
 ```
-https://<your-interface>.zapier.app/subscribe?user_id=<UID>&email=<EMAIL>&plan=<PLAN>
+https://<your-interface>.zapier.app/subscribe?email=<EMAIL>&plan=<PLAN>
 ```
-Zapier Interfaces can map those query params into hidden form fields.
+(Advanced: if you later want exact `user_id` matching, capture it via a
+Webhooks/Code step in the Zap editor and send `user_id` instead of `email`.)
 
 ---
 
@@ -67,13 +74,13 @@ per sale and flips `granted` after the endpoint call succeeds.
 > 1. Create a **Zapier Interface** with a **Form** page at path `/subscribe`
 >    titled "Village Calendar Premium". Fields:
 >    - Full name (text, required)
->    - Email (email, required)
+>    - **Email (email, required, visible)** — this is how customers are matched;
+>      they must use their Village Calendar login email.
 >    - Plan (dropdown: Monthly, Yearly, Lifetime, required)
->    - A **hidden** field `user_id` that is pre-filled from the URL query
->      parameter `user_id`, and a hidden `email` pre-filled from `email`.
->    - Add a **Stripe payment** component so the form collects payment for the
->      selected plan (Monthly and Yearly as recurring subscriptions, Lifetime as
->      a one-time payment). Connect my Stripe account.
+>    - Add **three Stripe payment components** — Monthly (recurring), Yearly
+>      (recurring), Lifetime (one-time) — each with its own price, and use
+>      **conditional visibility** so only the component matching the selected
+>      Plan is shown. Connect my Stripe account.
 >
 > 2. Create a **Zapier Table** named "Village Subscriptions" with fields:
 >    user_id (text), email (email), plan (dropdown: monthly/yearly/lifetime),
@@ -89,7 +96,7 @@ per sale and flips `granted` after the endpoint call succeeds.
 >    - **Action 2 — Webhooks by Zapier → POST** to
 >      `https://fmeizeyqwjieapfqgicl.functions.supabase.co/grant-premium`
 >      with header `x-zapier-secret: <MY_SECRET>` and JSON body
->      `{ "user_id": "{{form.user_id}}", "email": "{{form.email}}", "tier": "premium" }`.
+>      `{ "email": "{{form.email}}", "tier": "premium" }`.
 >    - **Action 3 — Update Record** in the table: set `granted` = true.
 >
 > 4. Create a **second Zap** for cancellations/refunds:
