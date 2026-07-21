@@ -51,3 +51,6 @@ webbuild.log
 t.txt
 test_out.txt
 .site_id.txt
+
+# secrets
+.env

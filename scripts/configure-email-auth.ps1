@@ -27,15 +27,30 @@
 #>
 
 param(
-  [Parameter(Mandatory = $true)] [string] $ResendApiKey,
-  [Parameter(Mandatory = $true)] [string] $SupabaseAccessToken,
+  [string] $ResendApiKey,
+  [string] $SupabaseAccessToken,
   [string] $ProjectRef = "fmeizeyqwjieapfqgicl",
-  [string] $SenderEmail = "onboarding@resend.dev",
-  [string] $SenderName = "Village Calendar",
+  [string] $SenderEmail,
+  [string] $SenderName,
   [switch] $RequireEmailConfirmation
 )
 
 $ErrorActionPreference = "Stop"
+
+# Fall back to values in ./.env when a parameter isn't passed.
+$envVars = & "$PSScriptRoot/load-env.ps1"
+if (-not $ResendApiKey)        { $ResendApiKey        = $envVars["RESEND_API_KEY"] }
+if (-not $SupabaseAccessToken) { $SupabaseAccessToken = $envVars["SUPABASE_ACCESS_TOKEN"] }
+if (-not $SenderEmail)         { $SenderEmail         = $envVars["RESEND_SENDER_EMAIL"] }
+if (-not $SenderName)          { $SenderName          = $envVars["RESEND_SENDER_NAME"] }
+if (-not $SenderEmail) { $SenderEmail = "onboarding@resend.dev" }
+if (-not $SenderName)  { $SenderName  = "Village Calendar" }
+
+if (-not $ResendApiKey -or -not $SupabaseAccessToken) {
+  Write-Host "Missing keys. Add RESEND_API_KEY and SUPABASE_ACCESS_TOKEN to .env" -ForegroundColor Red
+  Write-Host "(copy .env.example to .env), or pass -ResendApiKey / -SupabaseAccessToken." -ForegroundColor Red
+  exit 1
+}
 $base = "https://api.supabase.com/v1/projects/$ProjectRef/config/auth"
 $headers = @{
   Authorization  = "Bearer $SupabaseAccessToken"
