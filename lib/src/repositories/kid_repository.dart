@@ -56,7 +56,9 @@ class KidRepository {
     await _client.from('kid_profiles').delete().eq('id', id);
   }
 
-  /// Uploads photo bytes and returns a public URL.
+  /// Uploads photo bytes and returns the storage PATH (bucket is private; the
+  /// path is stored in kid_profiles.photo_url and resolved to a signed URL for
+  /// display).
   Future<String> uploadPhoto({
     required String userId,
     required Uint8List bytes,
@@ -72,6 +74,21 @@ class KidRepository {
             contentType: 'image/$extension',
           ),
         );
-    return _client.storage.from(_bucket).getPublicUrl(path);
+    return path;
+  }
+
+  /// Resolves a stored photo reference (path, or a legacy public URL) to a
+  /// short-lived signed URL. Returns null if it can't be signed.
+  Future<String?> signedPhotoUrl(String? stored) async {
+    if (stored == null || stored.isEmpty) return null;
+    var path = stored;
+    const marker = '/kid-photos/';
+    final idx = stored.indexOf(marker);
+    if (idx >= 0) path = stored.substring(idx + marker.length);
+    try {
+      return await _client.storage.from(_bucket).createSignedUrl(path, 3600);
+    } catch (_) {
+      return null;
+    }
   }
 }

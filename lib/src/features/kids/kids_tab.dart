@@ -54,7 +54,7 @@ class KidsTab extends ConsumerWidget {
                 ];
                 return Card(
                   child: ListTile(
-                    leading: _KidAvatar(kid: k),
+                    leading: KidPhotoAvatar(stored: k.photoUrl, fallback: k.name),
                     title: Text(k.nickname?.isNotEmpty == true
                         ? '${k.name} (${k.nickname})'
                         : k.name),
@@ -82,17 +82,36 @@ class KidsTab extends ConsumerWidget {
   }
 }
 
-class _KidAvatar extends StatelessWidget {
-  const _KidAvatar({required this.kid});
-  final KidProfile kid;
+/// Displays a kid photo from the private bucket via a short-lived signed URL,
+/// with an initial-letter fallback.
+class KidPhotoAvatar extends ConsumerWidget {
+  const KidPhotoAvatar({
+    super.key,
+    required this.stored,
+    required this.fallback,
+    this.radius = 20,
+  });
+
+  final String? stored;
+  final String fallback;
+  final double radius;
 
   @override
-  Widget build(BuildContext context) {
-    if (kid.photoUrl != null && kid.photoUrl!.isNotEmpty) {
-      return CircleAvatar(backgroundImage: NetworkImage(kid.photoUrl!));
-    }
-    return CircleAvatar(
-      child: Text(kid.name.isNotEmpty ? kid.name[0].toUpperCase() : '?'),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final letter = fallback.isNotEmpty ? fallback[0].toUpperCase() : '?';
+    final fallbackAvatar = CircleAvatar(radius: radius, child: Text(letter));
+    if (stored == null || stored!.isEmpty) return fallbackAvatar;
+    return FutureBuilder<String?>(
+      future: ref.read(kidRepositoryProvider).signedPhotoUrl(stored),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.done &&
+            snap.hasData &&
+            snap.data != null) {
+          return CircleAvatar(
+              radius: radius, backgroundImage: NetworkImage(snap.data!));
+        }
+        return fallbackAvatar;
+      },
     );
   }
 }
@@ -415,23 +434,36 @@ class _KidEditScreenState extends ConsumerState<KidEditScreen> {
   }
 
   Widget _photoPicker() {
-    ImageProvider? img;
+    final hasExisting =
+        _existingPhotoUrl != null && _existingPhotoUrl!.isNotEmpty;
+    final hasAny = _newPhotoBytes != null || hasExisting;
+
+    Widget avatar;
     if (_newPhotoBytes != null) {
-      img = MemoryImage(_newPhotoBytes!);
-    } else if (_existingPhotoUrl != null && _existingPhotoUrl!.isNotEmpty) {
-      img = NetworkImage(_existingPhotoUrl!);
+      avatar =
+          CircleAvatar(radius: 48, backgroundImage: MemoryImage(_newPhotoBytes!));
+    } else if (hasExisting) {
+      avatar = FutureBuilder<String?>(
+        future: ref.read(kidRepositoryProvider).signedPhotoUrl(_existingPhotoUrl),
+        builder: (context, snap) {
+          if (snap.hasData && snap.data != null) {
+            return CircleAvatar(
+                radius: 48, backgroundImage: NetworkImage(snap.data!));
+          }
+          return const CircleAvatar(radius: 48, child: Icon(Icons.person, size: 28));
+        },
+      );
+    } else {
+      avatar = const CircleAvatar(radius: 48, child: Icon(Icons.add_a_photo, size: 28));
     }
+
     return Column(
       children: [
-        CircleAvatar(
-          radius: 48,
-          backgroundImage: img,
-          child: img == null ? const Icon(Icons.add_a_photo, size: 28) : null,
-        ),
+        avatar,
         TextButton.icon(
           onPressed: _busy ? null : _pickPhoto,
           icon: const Icon(Icons.image_outlined),
-          label: Text(img == null ? 'Add photo' : 'Change photo'),
+          label: Text(hasAny ? 'Change photo' : 'Add photo'),
         ),
       ],
     );
