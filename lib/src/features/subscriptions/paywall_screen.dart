@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
+import '../../services/revenuecat_web.dart';
 import '../../services/setup_services.dart';
 import '../../state/providers.dart';
 
@@ -32,6 +34,37 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   bool _busy = false;
 
   Future<void> _upgrade() async {
+    // Flutter web uses the RevenueCat Web SDK bridge (purchases_flutter is
+    // mobile-only). On success, the RevenueCat webhook syncs subscription_tier.
+    if (kIsWeb) {
+      final uid = ref.read(currentUserProvider)?.id;
+      if (uid == null) {
+        _toast('Please sign in first.');
+        return;
+      }
+      setState(() => _busy = true);
+      try {
+        await RevenueCatWeb.configure(AppConfig.revenueCatWebApiKey, uid);
+        final result = await RevenueCatWeb.presentPaywall();
+        switch (result) {
+          case 'success':
+            ref.invalidate(currentProfileProvider);
+            if (mounted) Navigator.of(context).pop();
+          case 'cancelled':
+          case 'dismissed':
+            break;
+          default:
+            _toast('Purchase did not complete ($result).');
+        }
+      } catch (e) {
+        _toast('Paywall error: $e');
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
+
+    // --- mobile (purchases_flutter) ---
     if (!SetupServices.isRevenueCatReady) {
       _toast('Subscriptions are not configured yet. Add your RevenueCat keys '
           'to enable purchases.');
@@ -59,6 +92,19 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   Future<void> _restore() async {
+    if (kIsWeb) {
+      final uid = ref.read(currentUserProvider)?.id;
+      if (uid == null) return;
+      try {
+        await RevenueCatWeb.configure(AppConfig.revenueCatWebApiKey, uid);
+        final pro = await RevenueCatWeb.isPremium();
+        ref.invalidate(currentProfileProvider);
+        _toast(pro ? 'Premium restored.' : 'No active subscription found.');
+      } catch (e) {
+        _toast('Could not restore: $e');
+      }
+      return;
+    }
     if (!SetupServices.isRevenueCatReady) {
       _toast('Subscriptions are not configured yet.');
       return;

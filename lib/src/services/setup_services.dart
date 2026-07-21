@@ -29,6 +29,19 @@ class AppConfig {
 
   static bool get hasGoogleMapsKey => googleMapsApiKey.isNotEmpty;
 
+  /// RevenueCat Web Billing public key (used on Flutter web via the JS bridge).
+  /// Defaults to the sandbox/test key; override with --dart-define for prod.
+  static const revenueCatWebApiKey = String.fromEnvironment(
+    'REVENUECAT_WEB_API_KEY',
+    defaultValue: 'test_qeVgqUcpbgLSQIRIiKClErHwoyh',
+  );
+
+  /// The RevenueCat entitlement identifier that unlocks premium.
+  static const revenueCatEntitlementId = String.fromEnvironment(
+    'REVENUECAT_ENTITLEMENT_ID',
+    defaultValue: 'pro',
+  );
+
   static bool get hasSupabaseCredentials =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
