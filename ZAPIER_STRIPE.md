@@ -77,10 +77,13 @@ per sale and flips `granted` after the endpoint call succeeds.
 >    - **Email (email, required, visible)** — this is how customers are matched;
 >      they must use their Village Calendar login email.
 >    - Plan (dropdown: Monthly, Yearly, Lifetime, required)
->    - Add **three Stripe payment components** — Monthly (recurring), Yearly
->      (recurring), Lifetime (one-time) — each with its own price, and use
->      **conditional visibility** so only the component matching the selected
->      Plan is shown. Connect my Stripe account.
+>    - Add **three Stripe payment components** with these prices, and use
+>      **conditional visibility** so only the one matching the selected Plan is
+>      shown (revealed inline on selection, no separate Next step):
+>        - Monthly — **$6.99/month recurring**
+>        - Yearly — **$59.99/year recurring**
+>        - Lifetime — **$149.99 one-time**
+>      Connect my Stripe account.
 >
 > 2. Create a **Zapier Table** named "Village Subscriptions" with fields:
 >    user_id (text), email (email), plan (dropdown: monthly/yearly/lifetime),
