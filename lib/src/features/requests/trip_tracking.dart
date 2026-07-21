@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/breadcrumb.dart';
 import '../../models/help_request.dart';
+import '../../services/setup_services.dart';
 import '../../state/providers.dart';
 import '../subscriptions/paywall_screen.dart';
 
@@ -107,8 +109,29 @@ class _HelperLiveShareState extends ConsumerState<HelperLiveShare> {
   }
 }
 
+/// Builds a Google Static Maps URL: red marker at the latest position + a blue
+/// polyline of the trip's breadcrumb trail (down-sampled to keep the URL short).
+String _staticMapUrl(List<Breadcrumb> crumbs) {
+  final key = AppConfig.googleMapsApiKey;
+  List<Breadcrumb> pts = crumbs;
+  if (crumbs.length > 60) {
+    final step = (crumbs.length / 60).ceil();
+    pts = [for (var i = 0; i < crumbs.length; i += step) crumbs[i]];
+    if (pts.last != crumbs.last) pts.add(crumbs.last);
+  }
+  String ll(Breadcrumb c) =>
+      '${c.lat.toStringAsFixed(5)},${c.lng.toStringAsFixed(5)}';
+  final latest = crumbs.last;
+  final path = pts.map(ll).join('%7C');
+  return 'https://maps.googleapis.com/maps/api/staticmap'
+      '?size=640x320&scale=2'
+      '&markers=color:red%7C${ll(latest)}'
+      '&path=color:0x1e88e5cc%7Cweight:4%7C$path'
+      '&key=$key';
+}
+
 /// Parent-side live view of the helper's position. Map renders once a Google
-/// Maps JS key is configured; until then we show live coordinates + trail.
+/// Maps key is configured; until then we show live coordinates + trail.
 class ParentLiveView extends ConsumerWidget {
   const ParentLiveView({super.key, required this.request});
   final HelpRequest request;
@@ -150,19 +173,39 @@ class ParentLiveView extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
+                if (AppConfig.hasGoogleMapsKey) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      _staticMapUrl(crumbs),
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        height: 200,
+                        alignment: Alignment.center,
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        child: const Text('Map unavailable'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 SelectableText(coords,
                     style: theme.textTheme.titleMedium),
                 Text('Updated ${DateFormat('h:mm:ss a').format(latest.ts)}'
                     '${latest.accuracy != null ? ' · ±${latest.accuracy!.round()}m' : ''}'),
                 Text('${crumbs.length} points in this trip',
                     style: theme.textTheme.labelSmall),
-                const SizedBox(height: 8),
-                Text(
-                  'Live map needs a Google Maps key — add it and I\'ll render '
-                  'the route here.',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
+                if (!AppConfig.hasGoogleMapsKey) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add a Google Maps key (GOOGLE_MAPS_API_KEY) to show the '
+                    'route on a map here.',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ],
               ],
             );
           },

@@ -25,6 +25,9 @@ class AppConfig {
   static const firebaseMessagingEnabled = bool.fromEnvironment(
     'FIREBASE_MESSAGING_ENABLED',
   );
+  static const googleMapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+
+  static bool get hasGoogleMapsKey => googleMapsApiKey.isNotEmpty;
 
   static bool get hasSupabaseCredentials =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
