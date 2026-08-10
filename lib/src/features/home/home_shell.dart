@@ -16,7 +16,6 @@ import '../messages/messages_hub.dart';
 import '../notifications/notification_center.dart';
 import '../notifications/notification_settings_screen.dart';
 import '../requests/requests_tab.dart';
-import '../subscriptions/paywall_screen.dart';
 import '../village/join_village_screen.dart';
 
 /// Role-aware app shell shown once the user is signed in and in a village.
@@ -35,12 +34,26 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
-    // Persist the FCM token (if Firebase messaging produced one) so the backend
-    // can push to this user. No-op until messaging is configured.
-    final token = ref.read(setupStatusProvider).firebaseMessagingToken;
+    _syncPushToken();
+  }
+
+  Future<void> _syncPushToken() async {
     final uid = ref.read(currentUserProvider)?.id;
-    if (token != null && token.isNotEmpty && uid != null) {
-      ref.read(notificationRepositoryProvider).savePushToken(uid, token);
+    if (uid == null || !SetupServices.isFirebaseMessagingConfigured) {
+      return;
+    }
+
+    try {
+      final bootstrapToken = ref.read(setupStatusProvider).firebaseMessagingToken;
+      final token = bootstrapToken?.isNotEmpty == true
+          ? bootstrapToken
+          : await SetupServices.getFirebaseMessagingToken();
+      if (token != null && token.isNotEmpty) {
+        await ref.read(notificationRepositoryProvider).savePushToken(uid, token);
+      }
+    } catch (_) {
+      // Silent background sync only. The user can retry from Notification
+      // Settings without interrupting app startup.
     }
   }
 
@@ -432,6 +445,7 @@ class _ProfileTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final profile = ref.watch(currentProfileProvider).value;
     final village = ref.watch(currentVillageProvider).value;
+    final planLabel = ref.watch(isPremiumProvider) ? 'Premium' : 'Standard';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -477,24 +491,12 @@ class _ProfileTab extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.workspace_premium_outlined),
                   title: const Text('Plan'),
-                  trailing: Text(profile?.subscriptionTier ?? 'free'),
+                  trailing: Text(planLabel),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          if (!ref.watch(isPremiumProvider))
-            Card(
-              color: theme.colorScheme.tertiaryContainer,
-              child: ListTile(
-                leading: const Icon(Icons.workspace_premium),
-                title: const Text('Upgrade to Premium'),
-                subtitle: const Text('Multiple villages, live GPS, carpool automation'),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PaywallScreen()),
-                ),
-              ),
-            ),
           Card(
             child: Column(
               children: [
@@ -634,4 +636,3 @@ class _EmergencyBanner extends ConsumerWidget {
     );
   }
 }
-

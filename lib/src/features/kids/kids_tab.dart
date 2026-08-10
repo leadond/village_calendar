@@ -27,6 +27,7 @@ class KidsTab extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'kids-add-kid-fab',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const KidEditScreen()),
         ),

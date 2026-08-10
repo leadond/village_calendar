@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../models/help_request.dart';
 import '../../repositories/help_request_repository.dart';
+import '../../services/google_maps_service.dart';
+import '../../services/setup_services.dart';
 import '../../state/providers.dart';
 import '../messages/messages_screen.dart';
 import 'trip_tracking.dart';
@@ -22,6 +24,13 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   late HelpRequest _req = widget.request;
   final _comment = TextEditingController();
   bool _busy = false;
+  Future<RouteEstimate?>? _routeEstimateFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _routeEstimateFuture = _loadRouteEstimate();
+  }
 
   @override
   void dispose() {
@@ -39,11 +48,25 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       _req.status == HelpStatus.inProgress ||
       _req.status == HelpStatus.arrived;
 
+  Future<RouteEstimate?> _loadRouteEstimate() {
+    final pickup = _req.pickupAddress?.trim() ?? '';
+    final dropoff = _req.dropoffAddress?.trim() ?? '';
+    if (!AppConfig.hasGoogleMapsKey || pickup.isEmpty || dropoff.isEmpty) {
+      return Future.value(null);
+    }
+
+    return ref.read(googleMapsServiceProvider).estimateRoute(
+          originAddress: pickup,
+          destinationAddress: dropoff,
+        );
+  }
+
   Future<void> _run(Future<void> Function() action, String okMsg) async {
     setState(() => _busy = true);
     try {
       await action();
       _req = await ref.read(helpRequestRepositoryProvider).fetch(_req.id);
+      _routeEstimateFuture = _loadRouteEstimate();
       ref.invalidate(myRequestsProvider);
       ref.invalidate(availableRequestsProvider);
       ref.invalidate(myClaimedProvider);
@@ -133,6 +156,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 if (_req.dropoffAddress?.isNotEmpty == true)
                   _info(Icons.location_on_outlined, 'Dropoff',
                       _req.dropoffAddress!),
+                if (_req.pickupAddress?.isNotEmpty == true &&
+                    _req.dropoffAddress?.isNotEmpty == true)
+                  _routeEstimateCard(),
                 if (_req.specialInstructions?.isNotEmpty == true)
                   _info(Icons.info_outline, 'Instructions',
                       _req.specialInstructions!),
@@ -206,6 +232,61 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             visualDensity: VisualDensity.compact,
           ),
       ],
+    );
+  }
+
+  Widget _routeEstimateCard() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 6),
+      child: FutureBuilder<RouteEstimate?>(
+        future: _routeEstimateFuture,
+        builder: (context, snapshot) {
+          if (!AppConfig.hasGoogleMapsKey) {
+            return const SizedBox.shrink();
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              title: Text('Calculating route estimate'),
+            );
+          }
+          if (snapshot.hasError) {
+            return _infoCard(
+              icon: Icons.route_outlined,
+              title: 'Route estimate unavailable',
+              subtitle: '${snapshot.error}',
+            );
+          }
+          final route = snapshot.data;
+          if (route == null) {
+            return const SizedBox.shrink();
+          }
+          return _infoCard(
+            icon: Icons.route_outlined,
+            title: 'Drive estimate',
+            subtitle: '${route.distanceLabel} · ${route.durationLabel}',
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _infoCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+      ),
     );
   }
 

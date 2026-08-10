@@ -1,6 +1,6 @@
 {
-    "name": "village_calendar",
-    "short_name": "village_calendar",
+    "name": "My Village Pro",
+    "short_name": "My Village Pro",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

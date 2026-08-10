@@ -18,7 +18,7 @@
 .EXAMPLE
   # Basic: wire up Resend + leaked-password protection (keeps current signup flow)
   ./configure-email-auth.ps1 -ResendApiKey "re_xxx" -SupabaseAccessToken "sbp_xxx" `
-      -SenderEmail "no-reply@yourdomain.com" -SenderName "Village Calendar"
+      -SenderEmail "no-reply@yourdomain.com" -SenderName "My Village Pro"
 
 .EXAMPLE
   # Production: also require email confirmation on new signups
@@ -44,7 +44,7 @@ if (-not $SupabaseAccessToken) { $SupabaseAccessToken = $envVars["SUPABASE_ACCES
 if (-not $SenderEmail)         { $SenderEmail         = $envVars["RESEND_SENDER_EMAIL"] }
 if (-not $SenderName)          { $SenderName          = $envVars["RESEND_SENDER_NAME"] }
 if (-not $SenderEmail) { $SenderEmail = "onboarding@resend.dev" }
-if (-not $SenderName)  { $SenderName  = "Village Calendar" }
+if (-not $SenderName)  { $SenderName  = "My Village Pro" }
 
 if (-not $ResendApiKey -or -not $SupabaseAccessToken) {
   Write-Host "Missing keys. Add RESEND_API_KEY and SUPABASE_ACCESS_TOKEN to .env" -ForegroundColor Red

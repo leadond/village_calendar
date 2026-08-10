@@ -29,7 +29,7 @@ class _LandingPageState extends State<LandingPage> {
     final currentUser = _currentUser;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Village Calendar'), centerTitle: false),
+      appBar: AppBar(title: const Text('My Village Pro'), centerTitle: false),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -48,7 +48,7 @@ class _LandingPageState extends State<LandingPage> {
                   ),
                   const SizedBox(height: 28),
                   Text(
-                    'Welcome to Village Calendar',
+                    'Welcome to My Village Pro',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
@@ -64,16 +64,39 @@ class _LandingPageState extends State<LandingPage> {
                   ),
                   const SizedBox(height: 32),
                   if (currentUser == null)
-                    FilledButton.icon(
-                      onPressed: () async {
-                        await Navigator.pushNamed(context, '/auth');
+                    Column(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () async {
+                            final route = widget.setupStatus.supabaseConfigured
+                                ? '/auth'
+                                : '/preview';
 
-                        if (mounted) {
-                          setState(() {});
-                        }
-                      },
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Get Started'),
+                            await Navigator.pushNamed(context, route);
+
+                            if (mounted) {
+                              setState(() {});
+                            }
+                          },
+                          icon: const Icon(Icons.arrow_forward),
+                          label: Text(widget.setupStatus.supabaseConfigured
+                              ? 'Get Started'
+                              : 'Open App Preview'),
+                        ),
+                        if (widget.setupStatus.supabaseConfigured) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await Navigator.pushNamed(context, '/preview');
+                              if (mounted) {
+                                setState(() {});
+                              }
+                            },
+                            icon: const Icon(Icons.visibility_outlined),
+                            label: const Text('Preview App Without Login'),
+                          ),
+                        ],
+                      ],
                     )
                   else
                     _SignedInCard(

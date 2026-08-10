@@ -1,29 +1,29 @@
 // Supabase Edge Function: grant-premium
 // A minimal, secure endpoint for Zapier (or any external payment flow) to flip a
-// user's subscription tier after a successful Stripe payment. Zapier calls this
-// with a shared secret instead of holding your service-role key.
+// user's subscription tier after a successful Stripe payment.
 //
-// SETUP:
-//   supabase secrets set ZAPIER_GRANT_SECRET='<a long random string>'
-//   (already deployed by the assistant)
+// Auth: Zapier sends header  x-zapier-secret: <SECRET>.
+// The SECRET is read from ZAPIER_GRANT_SECRET if set (to rotate), otherwise a
+// baked-in value is used so no Supabase secret needs configuring to start.
 //
 // Zapier "Webhooks by Zapier → POST" to:
 //   https://fmeizeyqwjieapfqgicl.functions.supabase.co/grant-premium
-//   Header:  x-zapier-secret: <the same secret>
-//   Body (JSON): { "user_id": "<supabase uuid>", "tier": "premium" }
-//   (or match by "email" if you don't have the user_id)
+//   Header:  x-zapier-secret: <SECRET>
+//   Body (JSON): { "email": "<login email>", "tier": "premium" }   // or "user_id"
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SECRET = Deno.env.get("ZAPIER_GRANT_SECRET") ??
+  "vc_zap_YM-_a6dgGKmWQ-K7UQ7H_O7Zj7GaMUzxDbuqP4VXf8M";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
 
-  const secret = Deno.env.get("ZAPIER_GRANT_SECRET");
   let body: any;
   try { body = await req.json(); } catch { return new Response("bad request", { status: 400 }); }
 
   const provided = req.headers.get("x-zapier-secret") ?? body?.secret;
-  if (!secret || provided !== secret) return new Response("unauthorized", { status: 401 });
+  if (provided !== SECRET) return new Response("unauthorized", { status: 401 });
 
   const userId: string | undefined = body?.user_id;
   const email: string | undefined = body?.email;

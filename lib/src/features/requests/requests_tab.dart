@@ -42,6 +42,7 @@ class _RequestsTabState extends ConsumerState<RequestsTab> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'requests-new-request-fab',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const CreateRequestScreen()),
         ),

@@ -19,6 +19,7 @@ class EmergencyScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Emergency alerts')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'emergency-sos-fab',
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
         onPressed: () => Navigator.of(context).push(

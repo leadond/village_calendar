@@ -24,15 +24,95 @@ import '../repositories/notification_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../repositories/village_repository.dart';
 import '../services/location_service.dart';
+import '../services/ai_assistant_service.dart';
+import '../services/google_maps_service.dart';
 import '../services/setup_services.dart';
+
+class AdminDashboardStats {
+  const AdminDashboardStats({
+    required this.memberCount,
+    required this.pendingApprovals,
+    required this.openRequests,
+    required this.activeTrips,
+    required this.announcementCount,
+    required this.premiumMembers,
+  });
+
+  final int memberCount;
+  final int pendingApprovals;
+  final int openRequests;
+  final int activeTrips;
+  final int announcementCount;
+  final int premiumMembers;
+}
 
 /// Injected in `main()` via a ProviderScope override.
 final setupStatusProvider = Provider<SetupStatus>((ref) {
   throw UnimplementedError('setupStatusProvider must be overridden in main()');
 });
 
+final aiAssistantServiceProvider = Provider<AiAssistantService>((ref) {
+  return const AiAssistantService();
+});
+
+final googleMapsServiceProvider = Provider<GoogleMapsService>((ref) {
+  return const GoogleMapsService();
+});
+
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return SetupServices.supabaseClient;
+});
+
+final adminDashboardStatsProvider = FutureProvider<AdminDashboardStats>((ref) async {
+  final profile = await ref.watch(currentProfileProvider.future);
+  final role = ref.watch(activeRoleProvider);
+
+  if (profile == null || !profile.hasVillage || role != UserRole.admin) {
+    return const AdminDashboardStats(
+      memberCount: 0,
+      pendingApprovals: 0,
+      openRequests: 0,
+      activeTrips: 0,
+      announcementCount: 0,
+      premiumMembers: 0,
+    );
+  }
+
+  final villageRepo = ref.watch(villageRepositoryProvider);
+  final members = await villageRepo.activeVillageMembers();
+  final pending = await villageRepo.pendingJoinRequests();
+  final client = ref.watch(supabaseClientProvider);
+
+  final openRows = await client
+      .from('help_requests')
+      .select('id')
+      .eq('village_id', profile.villageId!)
+      .eq('status', 'open');
+
+  final activeRows = await client
+      .from('help_requests')
+      .select('id')
+      .eq('village_id', profile.villageId!)
+      .inFilter('status', ['confirmed', 'in_progress', 'arrived']);
+
+  final announcementRows = await client
+      .from('village_announcements')
+      .select('id')
+      .eq('village_id', profile.villageId!);
+
+  final premiumMembers = members.where((member) {
+    final tier = (member['subscription_tier'] as String?) ?? 'free';
+    return tier != 'free' && tier.isNotEmpty;
+  }).length;
+
+  return AdminDashboardStats(
+    memberCount: members.length,
+    pendingApprovals: pending.length,
+    openRequests: (openRows as List).length,
+    activeTrips: (activeRows as List).length,
+    announcementCount: (announcementRows as List).length,
+    premiumMembers: premiumMembers,
+  );
 });
 
 /// Stream of auth changes (sign-in / sign-out / token refresh).
@@ -190,10 +270,10 @@ final activeEmergencyCountProvider = Provider<int>((ref) {
 });
 
 // ---- M9 subscriptions ------------------------------------------------------
-/// Premium = any paid tier. Server-verified via RevenueCat webhook in prod.
+/// Temporary test-mode override: every signed-in account behaves as premium
+/// until subscriptions are re-enabled for public release.
 final isPremiumProvider = Provider<bool>((ref) {
-  final tier = ref.watch(currentProfileProvider).value?.subscriptionTier ?? 'free';
-  return tier != 'free' && tier.isNotEmpty;
+  return ref.watch(currentUserProvider) != null;
 });
 
 // ---- Direct messages + broadcasts ------------------------------------------

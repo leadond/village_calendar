@@ -170,6 +170,7 @@ class _DraftsReviewScreenState extends ConsumerState<DraftsReviewScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'requests-review-drafts-fab',
         onPressed: _busy ? null : _generate,
         icon: _busy
             ? const SizedBox.square(

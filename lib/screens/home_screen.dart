@@ -152,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Village Calendar'),
+        title: const Text('My Village Pro'),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -201,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'home-create-event-fab',
         onPressed: _createEvent,
         icon: const Icon(Icons.add),
         label: const Text('Event'),

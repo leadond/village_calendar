@@ -1,0 +1,26 @@
+{
+  "name": "my-village-pro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "pub:get": "flutter pub get",
+    "prepare": "flutter pub get",
+    "start": "powershell -ExecutionPolicy Bypass -File .\\scripts\\start-web-preview.ps1 -Port 3009",
+    "start:android": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command run -Device android",
+    "start:ios": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command run -Device ios",
+    "start:web": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command run -Device edge",
+    "start:web-debug": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command run -Device web-server",
+    "start:web-server": "powershell -ExecutionPolicy Bypass -File .\\scripts\\start-web-preview.ps1 -Port 3009",
+    "start:windows": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command run -Device windows",
+    "build": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command build -BuildTarget web -Release",
+    "build:android": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command build -BuildTarget apk -Release",
+    "build:ios": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command build -BuildTarget ipa -Release",
+    "build:ipa": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-with-env.ps1 -Command build -BuildTarget ipa -Release",
+    "test": "flutter test",
+    "analyze": "flutter analyze",
+    "format": "dart format .",
+    "clean": "flutter clean"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

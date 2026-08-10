@@ -21,16 +21,16 @@ class LegalScreen extends StatelessWidget {
 }
 
 const String kTermsText = '''
-Village Calendar — Terms of Service
+My Village Pro — Terms of Service
 
 These are placeholder terms for the preview release. Replace with your
 finalized Terms of Service before launch.
 
-1. Acceptance. By using Village Calendar you agree to coordinate childcare and
+1. Acceptance. By using My Village Pro you agree to coordinate childcare and
    help requests responsibly with people in your trusted village.
 
 2. Your responsibilities. You are responsible for vetting the people you add to
-   your village. Village Calendar helps coordinate care among people you already
+   your village. My Village Pro helps coordinate care among people you already
    know and trust; it does not screen, background-check, or vouch for members.
 
 3. Acceptable use. Do not use the app to harass, endanger, or mislead other
@@ -45,7 +45,7 @@ Contact: support@yourdomain.example
 ''';
 
 const String kPrivacyText = '''
-Village Calendar — Privacy Policy
+My Village Pro — Privacy Policy
 
 This is a placeholder privacy policy for the preview release. Replace with your
 finalized policy before launch.

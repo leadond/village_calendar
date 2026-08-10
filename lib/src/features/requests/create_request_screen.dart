@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/help_request.dart';
+import '../../services/google_maps_service.dart';
+import '../../services/setup_services.dart';
 import '../../state/providers.dart';
 
 class CreateRequestScreen extends ConsumerStatefulWidget {
@@ -19,11 +21,13 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
   final _pickup = TextEditingController();
   final _dropoff = TextEditingController();
   final _instructions = TextEditingController();
+  final _aiPrompt = TextEditingController();
 
   HelpCategory _category = HelpCategory.schoolPickup;
   DateTime _when = DateTime.now().add(const Duration(hours: 1));
   final Set<String> _kidIds = {};
   bool _busy = false;
+  bool _aiBusy = false;
 
   @override
   void dispose() {
@@ -33,6 +37,7 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
       _pickup,
       _dropoff,
       _instructions,
+      _aiPrompt,
     ]) {
       c.dispose();
     }
@@ -94,6 +99,36 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
     }
   }
 
+  Future<void> _draftWithAi() async {
+    final roughPrompt = _aiPrompt.text.trim();
+    if (roughPrompt.isEmpty) {
+      _toast('Add a quick note for AI first.');
+      return;
+    }
+
+    setState(() => _aiBusy = true);
+    try {
+      final draft =
+          await ref.read(aiAssistantServiceProvider).draftHelpRequest(
+                roughPrompt,
+              );
+      if (!mounted) return;
+      setState(() {
+        _title.text = draft.title;
+        _category = draft.category;
+        _description.text = draft.description ?? '';
+        _pickup.text = draft.pickupAddress ?? '';
+        _dropoff.text = draft.dropoffAddress ?? '';
+        _instructions.text = draft.specialInstructions ?? '';
+      });
+      _toast('AI draft applied. Review and adjust before sending.');
+    } catch (e) {
+      _toast('AI draft failed: $e');
+    } finally {
+      if (mounted) setState(() => _aiBusy = false);
+    }
+  }
+
   void _toast(String m) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -102,12 +137,59 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
   @override
   Widget build(BuildContext context) {
     final kids = ref.watch(myKidsProvider).value ?? const [];
+    final mapsService = ref.read(googleMapsServiceProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('New request')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Draft with AI',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Describe the request in plain English and AI will fill the form for you.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _aiPrompt,
+                      minLines: 2,
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        hintText:
+                            'Example: Need someone to pick up Maya from Cedar Elementary tomorrow at 3:15 and bring her to soccer practice by 4:00.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: (_busy || _aiBusy) ? null : _draftWithAi,
+                      icon: _aiBusy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome),
+                      label: const Text('Draft Request with AI'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             _field(_title, 'Title *', Icons.title,
                 cap: TextCapitalization.sentences),
             const SizedBox(height: 12),
@@ -164,9 +246,28 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
             const SizedBox(height: 12),
             _field(_description, 'Description', Icons.notes, lines: 2),
             const SizedBox(height: 12),
-            _field(_pickup, 'Pickup address', Icons.my_location),
+            _AddressAutocompleteField(
+              controller: _pickup,
+              label: 'Pickup address',
+              icon: Icons.my_location,
+              enabled: !_busy,
+              service: mapsService,
+            ),
             const SizedBox(height: 12),
-            _field(_dropoff, 'Dropoff address', Icons.location_on_outlined),
+            _AddressAutocompleteField(
+              controller: _dropoff,
+              label: 'Dropoff address',
+              icon: Icons.location_on_outlined,
+              enabled: !_busy,
+              service: mapsService,
+            ),
+            if (!AppConfig.hasGoogleMapsKey) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Add GOOGLE_MAPS_API_KEY to .env to enable smart address search and route suggestions.',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ],
             const SizedBox(height: 12),
             _field(_instructions, 'Special instructions',
                 Icons.info_outline, lines: 2),
@@ -204,4 +305,126 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
       ),
     );
   }
+}
+
+class _AddressAutocompleteField extends StatefulWidget {
+  const _AddressAutocompleteField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.enabled,
+    required this.service,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final bool enabled;
+  final GoogleMapsService service;
+
+  @override
+  State<_AddressAutocompleteField> createState() =>
+      _AddressAutocompleteFieldState();
+}
+
+class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
+  late final FocusNode _focusNode;
+  String _sessionToken = _newSessionToken();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        _sessionToken = _newSessionToken();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawAutocomplete<PlaceSuggestion>(
+      textEditingController: widget.controller,
+      focusNode: _focusNode,
+      optionsBuilder: (value) async {
+        if (!widget.enabled || !widget.service.isConfigured) {
+          return const <PlaceSuggestion>[];
+        }
+        try {
+          return await widget.service.autocompleteAddress(
+            value.text,
+            sessionToken: _sessionToken,
+          );
+        } catch (_) {
+          return const <PlaceSuggestion>[];
+        }
+      },
+      displayStringForOption: (option) => option.fullText,
+      onSelected: (selection) {
+        widget.controller.text = selection.fullText;
+        _sessionToken = _newSessionToken();
+      },
+      fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: widget.enabled,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            prefixIcon: Icon(widget.icon),
+            suffixIcon: widget.service.isConfigured
+                ? const Icon(Icons.auto_awesome, size: 18)
+                : null,
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (_) => onSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final list = options.toList();
+        if (list.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720, maxHeight: 240),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shrinkWrap: true,
+                itemCount: list.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final option = list[index];
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.place_outlined),
+                    title: Text(option.primaryText),
+                    subtitle: option.secondaryText == null
+                        ? null
+                        : Text(option.secondaryText!),
+                    onTap: () => onSelected(option),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _newSessionToken() =>
+      DateTime.now().microsecondsSinceEpoch.toString();
 }

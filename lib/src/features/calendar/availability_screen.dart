@@ -28,6 +28,7 @@ class AvailabilityScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('My schedule')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'calendar-add-availability-fab',
         onPressed: () => _addSheet(context, ref, isHelper ? 'available' : 'work'),
         icon: const Icon(Icons.add),
         label: const Text('Add block'),

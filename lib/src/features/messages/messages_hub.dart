@@ -155,6 +155,7 @@ class _AnnouncementsTab extends ConsumerWidget {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'messages-broadcast-fab',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const BroadcastComposeScreen()),
         ),
@@ -228,6 +229,7 @@ class _BroadcastComposeScreenState
   final _title = TextEditingController();
   final _message = TextEditingController();
   bool _busy = false;
+  bool _aiBusy = false;
 
   @override
   void dispose() {
@@ -268,6 +270,38 @@ class _BroadcastComposeScreenState
     }
   }
 
+  Future<void> _improveWithAi() async {
+    if (_title.text.trim().isEmpty && _message.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a rough title or message first.')),
+      );
+      return;
+    }
+
+    setState(() => _aiBusy = true);
+    try {
+      final improved = await ref.read(aiAssistantServiceProvider).improveAnnouncement(
+            title: _title.text,
+            message: _message.text,
+          );
+      if (!mounted) return;
+      setState(() {
+        _title.text = improved['title'] ?? _title.text;
+        _message.text = improved['message'] ?? _message.text;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('AI polished your announcement.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('AI improvement failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _aiBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -299,8 +333,19 @@ class _BroadcastComposeScreenState
             Text('Everyone in your village gets a notification.',
                 style: Theme.of(context).textTheme.labelSmall),
             const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: (_busy || _aiBusy) ? null : _improveWithAi,
+              icon: _aiBusy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_awesome),
+              label: const Text('Polish with AI'),
+            ),
+            const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: _busy ? null : _send,
+              onPressed: (_busy || _aiBusy) ? null : _send,
               icon: _busy
                   ? const SizedBox.square(
                       dimension: 18,

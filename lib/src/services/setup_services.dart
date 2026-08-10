@@ -22,10 +22,17 @@ class AppConfig {
   static const firebaseStorageBucket = String.fromEnvironment(
     'FIREBASE_STORAGE_BUCKET',
   );
+  static const firebaseWebVapidKey = String.fromEnvironment(
+    'FIREBASE_WEB_VAPID_KEY',
+  );
   static const firebaseMessagingEnabled = bool.fromEnvironment(
     'FIREBASE_MESSAGING_ENABLED',
   );
   static const googleMapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+  static const nvidiaModel = String.fromEnvironment(
+    'NVIDIA_MODEL',
+    defaultValue: 'nvidia/llama-3.1-nemotron-nano-8b-v1',
+  );
 
   static bool get hasGoogleMapsKey => googleMapsApiKey.isNotEmpty;
 
@@ -90,6 +97,18 @@ class SetupServices {
   static bool get isSupabaseReady => _supabaseInitialized;
   static bool get isFirebaseReady => _firebaseInitialized;
   static bool get isRevenueCatReady => _revenueCatInitialized;
+  static bool get isFirebaseMessagingConfigured {
+    if (!AppConfig.firebaseMessagingEnabled) {
+      return false;
+    }
+
+    if (kIsWeb) {
+      return AppConfig.hasFirebaseWebConfig &&
+          AppConfig.firebaseWebVapidKey.isNotEmpty;
+    }
+
+    return true;
+  }
 
   static SupabaseClient? get maybeSupabaseClient {
     if (!_supabaseInitialized) {
@@ -171,11 +190,23 @@ class SetupServices {
       return null;
     }
 
+    if (kIsWeb && AppConfig.firebaseWebVapidKey.isEmpty) {
+      warnings.add(
+        'Firebase Messaging skipped on web. Pass FIREBASE_WEB_VAPID_KEY with '
+        '--dart-define after generating a Web Push certificate in Firebase.',
+      );
+      return null;
+    }
+
     try {
       await Firebase.initializeApp(
         options: kIsWeb ? AppConfig.firebaseWebOptions : null,
       );
       _firebaseInitialized = true;
+
+      if (kIsWeb) {
+        return null;
+      }
 
       final messaging = FirebaseMessaging.instance;
       final settings = await messaging.requestPermission(
@@ -193,7 +224,9 @@ class SetupServices {
         return null;
       }
 
-      final token = await messaging.getToken();
+      final token = kIsWeb
+          ? await messaging.getToken(vapidKey: AppConfig.firebaseWebVapidKey)
+          : await messaging.getToken();
       debugPrint('Firebase Messaging Token: $token');
       return token;
     } catch (error, stackTrace) {
@@ -209,10 +242,6 @@ class SetupServices {
 
   static Future<bool> _initializeRevenueCat(List<String> warnings) async {
     if (!AppConfig.hasRevenueCatKey) {
-      warnings.add(
-        'RevenueCat skipped. Pass REVENUECAT_API_KEY with --dart-define when '
-        'you are ready to enable subscriptions.',
-      );
       return false;
     }
 
@@ -235,5 +264,47 @@ class SetupServices {
       debugPrintStack(label: error.toString(), stackTrace: stackTrace);
       return false;
     }
+  }
+
+  static Future<void> _ensureFirebaseInitialized() async {
+    if (_firebaseInitialized) {
+      return;
+    }
+
+    await Firebase.initializeApp(
+      options: kIsWeb ? AppConfig.firebaseWebOptions : null,
+    );
+    _firebaseInitialized = true;
+  }
+
+  static Future<String?> getFirebaseMessagingToken({
+    bool requestPermission = false,
+  }) async {
+    if (!isFirebaseMessagingConfigured) {
+      return null;
+    }
+
+    await _ensureFirebaseInitialized();
+    final messaging = FirebaseMessaging.instance;
+
+    if (requestPermission) {
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      final isAuthorized =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional;
+
+      if (!isAuthorized) {
+        return null;
+      }
+    }
+
+    return kIsWeb
+        ? await messaging.getToken(vapidKey: AppConfig.firebaseWebVapidKey)
+        : await messaging.getToken();
   }
 }

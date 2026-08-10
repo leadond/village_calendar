@@ -1,216 +1,258 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../models/breadcrumb.dart';
 import '../../models/help_request.dart';
-import '../../services/setup_services.dart';
 import '../../state/providers.dart';
-import '../subscriptions/paywall_screen.dart';
 
-/// Helper-side control to share live location during an active trip. Only
-/// streams while the toggle is on and the tab is open (foreground web).
-class HelperLiveShare extends ConsumerStatefulWidget {
-  const HelperLiveShare({super.key, required this.request});
-  final HelpRequest request;
+final tripProvider =
+    StateNotifierProvider<TripNotifier, List<Map<String, dynamic>>>((ref) {
+  return TripNotifier();
+});
 
-  @override
-  ConsumerState<HelperLiveShare> createState() => _HelperLiveShareState();
+class TripNotifier extends StateNotifier<List<Map<String, dynamic>>> {
+  TripNotifier() : super([]);
+
+  void addTrip(String destination, DateTime time) {
+    state = [
+      ...state,
+      {'id': const Uuid().v4(), 'destination': destination, 'time': time},
+    ];
+  }
+
+  void removeTrip(String id) {
+    state = state.where((trip) => trip['id'] != id).toList();
+  }
 }
 
-class _HelperLiveShareState extends ConsumerState<HelperLiveShare> {
-  StreamSubscription<Position>? _sub;
-  bool _sharing = false;
-  int _sent = 0;
-  String? _error;
+class TripTracking extends ConsumerWidget {
+  const TripTracking({super.key});
 
   @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _toggle(bool on) async {
-    if (!on) {
-      await _sub?.cancel();
-      _sub = null;
-      setState(() => _sharing = false);
-      return;
-    }
-
-    // Live GPS sharing is a Premium feature.
-    if (!await requirePremium(context, ref)) {
-      setState(() => _error = 'Live location sharing requires Premium.');
-      return;
-    }
-
-    final loc = ref.read(locationServiceProvider);
-    final granted = await loc.ensurePermission();
-    if (!granted) {
-      setState(() => _error = 'Location permission denied.');
-      return;
-    }
-
-    setState(() {
-      _sharing = true;
-      _error = null;
-    });
-
-    _sub = loc.positionStream().listen((pos) async {
-      try {
-        await ref.read(gpsRepositoryProvider).insertBreadcrumb(
-              requestId: widget.request.id,
-              lat: pos.latitude,
-              lng: pos.longitude,
-              accuracy: pos.accuracy,
-              speed: pos.speed,
-              heading: pos.heading,
-            );
-        if (mounted) setState(() => _sent++);
-      } catch (_) {
-        // transient write failures are ignored; next tick retries
-      }
-    }, onError: (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Location error: $e';
-          _sharing = false;
-        });
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Column(
-        children: [
-          SwitchListTile(
-            secondary: const Icon(Icons.share_location),
-            title: const Text('Share my live location'),
-            subtitle: Text(_sharing
-                ? 'Sharing… $_sent updates sent'
-                : 'Off — turn on so the parent can follow your trip'),
-            value: _sharing,
-            onChanged: _toggle,
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Text(_error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trips = ref.watch(tripProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Trip Tracking')),
+      body: ListView.builder(
+        itemCount: trips.length,
+        itemBuilder: (context, index) {
+          final trip = trips[index];
+          return ListTile(
+            title: Text(trip['destination'] as String),
+            subtitle: Text('${trip['time']}'),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: () {
+                ref.read(tripProvider.notifier).removeTrip(trip['id'] as String);
+              },
             ),
-        ],
+          );
+        },
       ),
     );
   }
 }
 
-/// Builds a Google Static Maps URL: red marker at the latest position + a blue
-/// polyline of the trip's breadcrumb trail (down-sampled to keep the URL short).
-String _staticMapUrl(List<Breadcrumb> crumbs) {
-  final key = AppConfig.googleMapsApiKey;
-  List<Breadcrumb> pts = crumbs;
-  if (crumbs.length > 60) {
-    final step = (crumbs.length / 60).ceil();
-    pts = [for (var i = 0; i < crumbs.length; i += step) crumbs[i]];
-    if (pts.last != crumbs.last) pts.add(crumbs.last);
-  }
-  String ll(Breadcrumb c) =>
-      '${c.lat.toStringAsFixed(5)},${c.lng.toStringAsFixed(5)}';
-  final latest = crumbs.last;
-  final path = pts.map(ll).join('%7C');
-  return 'https://maps.googleapis.com/maps/api/staticmap'
-      '?size=640x320&scale=2'
-      '&markers=color:red%7C${ll(latest)}'
-      '&path=color:0x1e88e5cc%7Cweight:4%7C$path'
-      '&key=$key';
-}
+class HelperLiveShare extends ConsumerWidget {
+  const HelperLiveShare({super.key, required this.request});
 
-/// Parent-side live view of the helper's position. Map renders once a Google
-/// Maps key is configured; until then we show live coordinates + trail.
-class ParentLiveView extends ConsumerWidget {
-  const ParentLiveView({super.key, required this.request});
   final HelpRequest request;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final async = ref.watch(breadcrumbsStreamProvider(request.id));
+    final crumbs = ref.watch(breadcrumbsStreamProvider(request.id));
+    return _LiveTripCard(
+      title: 'Live helper sharing',
+      subtitle:
+          'Location sharing is active for this trip. Parents can follow progress in real time.',
+      icon: Icons.my_location,
+      child: crumbs.when(
+        loading: () => const _LiveTripLoading(),
+        error: (error, _) => _LiveTripMessage(
+          icon: Icons.error_outline,
+          message: 'Could not load live location: $error',
+        ),
+        data: (items) {
+          final latest = items.isNotEmpty ? items.last : null;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (latest == null)
+                const _LiveTripMessage(
+                  icon: Icons.location_searching,
+                  message: 'No GPS breadcrumbs yet. Start moving and the trip trail will appear here.',
+                )
+              else
+                _BreadcrumbSummary(latest: latest, count: items.length),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
 
+class ParentLiveView extends ConsumerWidget {
+  const ParentLiveView({super.key, required this.request});
+
+  final HelpRequest request;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final crumbs = ref.watch(breadcrumbsStreamProvider(request.id));
+    return _LiveTripCard(
+      title: 'Parent live view',
+      subtitle:
+          'Follow the helper on the active trip. The most recent breadcrumb is shown below.',
+      icon: Icons.route,
+      child: crumbs.when(
+        loading: () => const _LiveTripLoading(),
+        error: (error, _) => _LiveTripMessage(
+          icon: Icons.error_outline,
+          message: 'Could not load helper location: $error',
+        ),
+        data: (items) {
+          final latest = items.isNotEmpty ? items.last : null;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (latest == null)
+                const _LiveTripMessage(
+                  icon: Icons.map_outlined,
+                  message: 'Waiting for the helper to begin location sharing.',
+                )
+              else
+                _BreadcrumbSummary(latest: latest, count: items.length),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LiveTripCard extends StatelessWidget {
+  const _LiveTripCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: async.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Text('Could not load location.\n$e'),
-          data: (crumbs) {
-            if (crumbs.isEmpty) {
-              return const Row(
-                children: [
-                  Icon(Icons.location_searching),
-                  SizedBox(width: 12),
-                  Expanded(
-                      child: Text('Waiting for the helper to share location…')),
-                ],
-              );
-            }
-            final latest = crumbs.last;
-            final coords =
-                '${latest.lat.toStringAsFixed(5)}, ${latest.lng.toStringAsFixed(5)}';
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.my_location, color: theme.colorScheme.primary),
-                    const SizedBox(width: 8),
-                    Text('Helper location',
-                        style: theme.textTheme.titleSmall),
-                  ],
+                Icon(icon, color: theme.colorScheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                if (AppConfig.hasGoogleMapsKey) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      _staticMapUrl(crumbs),
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Container(
-                        height: 200,
-                        alignment: Alignment.center,
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: const Text('Map unavailable'),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                SelectableText(coords,
-                    style: theme.textTheme.titleMedium),
-                Text('Updated ${DateFormat('h:mm:ss a').format(latest.ts)}'
-                    '${latest.accuracy != null ? ' · ±${latest.accuracy!.round()}m' : ''}'),
-                Text('${crumbs.length} points in this trip',
-                    style: theme.textTheme.labelSmall),
-                if (!AppConfig.hasGoogleMapsKey) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Add a Google Maps key (GOOGLE_MAPS_API_KEY) to show the '
-                    'route on a map here.',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
               ],
-            );
-          },
+            ),
+            const SizedBox(height: 8),
+            Text(subtitle),
+            const SizedBox(height: 12),
+            child,
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _LiveTripLoading extends StatelessWidget {
+  const _LiveTripLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        SizedBox(width: 12),
+        Expanded(child: Text('Loading live trip updates...')),
+      ],
+    );
+  }
+}
+
+class _LiveTripMessage extends StatelessWidget {
+  const _LiveTripMessage({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(message)),
+      ],
+    );
+  }
+}
+
+class _BreadcrumbSummary extends StatelessWidget {
+  const _BreadcrumbSummary({required this.latest, required this.count});
+
+  final Breadcrumb latest;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatter = DateFormat('MMM d, h:mm a');
+    final rows = <(String, String)>[
+      ('Updated', formatter.format(latest.ts)),
+      ('Coordinates', '${latest.lat.toStringAsFixed(5)}, ${latest.lng.toStringAsFixed(5)}'),
+      ('Accuracy', latest.accuracy == null ? 'Unknown' : '${latest.accuracy!.toStringAsFixed(0)} m'),
+      ('Trail points', '$count'),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final row in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    row.$1,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+                Expanded(child: Text(row.$2)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
