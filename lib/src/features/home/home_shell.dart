@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/app_notification.dart';
+import '../../models/help_request.dart';
 import '../../models/profile.dart';
 import '../../models/village.dart';
 import '../../services/setup_services.dart';
@@ -30,6 +33,8 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
+  final Set<String> _seenNotificationIds = <String>{};
+  bool _notificationFeedHydrated = false;
 
   @override
   void initState() {
@@ -44,12 +49,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
 
     try {
-      final bootstrapToken = ref.read(setupStatusProvider).firebaseMessagingToken;
+      final bootstrapToken =
+          ref.read(setupStatusProvider).firebaseMessagingToken;
       final token = bootstrapToken?.isNotEmpty == true
           ? bootstrapToken
           : await SetupServices.getFirebaseMessagingToken();
       if (token != null && token.isNotEmpty) {
-        await ref.read(notificationRepositoryProvider).savePushToken(uid, token);
+        await ref
+            .read(notificationRepositoryProvider)
+            .savePushToken(uid, token);
       }
     } catch (_) {
       // Silent background sync only. The user can retry from Notification
@@ -59,6 +67,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<List<AppNotification>>>(notificationsStreamProvider,
+        (previous, next) {
+      next.whenData((items) async {
+        final ids = items.map((item) => item.id).toSet();
+        if (!_notificationFeedHydrated) {
+          _seenNotificationIds
+            ..clear()
+            ..addAll(ids);
+          _notificationFeedHydrated = true;
+          return;
+        }
+        final freshUnread = items.where(
+          (item) => item.isUnread && !_seenNotificationIds.contains(item.id),
+        );
+        if (freshUnread.isNotEmpty) {
+          await SystemSound.play(SystemSoundType.alert);
+        }
+        _seenNotificationIds
+          ..clear()
+          ..addAll(ids);
+      });
+    });
+
     // Role is per-village now: use the role held in the ACTIVE village.
     final role = ref.watch(activeRoleProvider);
     final canManageKids = role == UserRole.parent || role == UserRole.admin;
@@ -70,8 +101,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       if (canManageKids)
         _TabDef('Kids', Icons.child_care_outlined, Icons.child_care,
             const KidsTab()),
-      _TabDef('Village', Icons.groups_outlined, Icons.groups, const _VillageTab()),
-      _TabDef('Profile', Icons.person_outline, Icons.person, const _ProfileTab()),
+      _TabDef(
+          'Village', Icons.groups_outlined, Icons.groups, const _VillageTab()),
+      _TabDef(
+          'Profile', Icons.person_outline, Icons.person, const _ProfileTab()),
     ];
 
     final safeIndex = _index.clamp(0, tabs.length - 1);
@@ -114,6 +147,8 @@ class _HomeTab extends ConsumerWidget {
     final profile = ref.watch(currentProfileProvider).value;
     final villageAsync = ref.watch(currentVillageProvider);
     final members = ref.watch(villageMembersProvider).value ?? const [];
+    final claimed = ref.watch(myClaimedProvider);
+    final role = ref.watch(activeRoleProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -137,7 +172,8 @@ class _HomeTab extends ConsumerWidget {
           _NotificationBell(
             count: ref.watch(unreadCountProvider),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const NotificationCenterScreen()),
+              MaterialPageRoute(
+                  builder: (_) => const NotificationCenterScreen()),
             ),
           ),
           const VillageSwitcherAction(),
@@ -170,9 +206,14 @@ class _HomeTab extends ConsumerWidget {
             data: (village) => _VillageSummaryCard(
               village: village,
               memberCount: members.length,
-              role: ref.watch(activeRoleProvider),
+              role: role,
             ),
           ),
+          if (role == UserRole.helper ||
+              (claimed.value?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 16),
+            _HelperAssignmentsSection(assignmentsAsync: claimed),
+          ],
           const SizedBox(height: 16),
           Text('Quick actions', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -192,6 +233,56 @@ class _HomeTab extends ConsumerWidget {
   }
 }
 
+class _HelperAssignmentsSection extends StatelessWidget {
+  const _HelperAssignmentsSection({required this.assignmentsAsync});
+
+  final AsyncValue<List<HelpRequest>> assignmentsAsync;
+
+  @override
+  Widget build(BuildContext context) {
+    return assignmentsAsync.when(
+      loading: () => const Card(
+        child: ListTile(
+          leading: CircularProgressIndicator(),
+          title: Text('Loading your assignments...'),
+        ),
+      ),
+      error: (error, _) => Card(
+        child: ListTile(
+          leading: const Icon(Icons.error_outline),
+          title: const Text('Could not load assignments'),
+          subtitle: Text('$error'),
+        ),
+      ),
+      data: (items) {
+        final active = items
+            .where((item) =>
+                item.status == HelpStatus.claimed ||
+                item.status == HelpStatus.confirmed ||
+                item.status == HelpStatus.inProgress ||
+                item.status == HelpStatus.arrived)
+            .toList(growable: false);
+        if (active.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'My assignments',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            for (final request in active)
+              RequestCard(
+                request: request,
+                subtitle: 'Assigned to you',
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _VillageSummaryCard extends StatelessWidget {
   const _VillageSummaryCard({
     required this.village,
@@ -202,6 +293,53 @@ class _VillageSummaryCard extends StatelessWidget {
   final Village? village;
   final int memberCount;
   final UserRole role;
+
+  static const _helperInviteBaseUrl = 'https://myvillagepro.devapphero.com';
+
+  String _inviteMessage(Village village) {
+    return 'Join my village on My Village Pro.\n\n'
+        'Village: ${village.name}\n'
+        'Invite code: ${village.inviteCode}\n'
+        'Suggested role: Helper\n\n'
+        'Open or download the app here:\n'
+        '$_helperInviteBaseUrl';
+  }
+
+  Future<void> _copyInvite(BuildContext context, Village village) async {
+    await Clipboard.setData(ClipboardData(text: _inviteMessage(village)));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Helper invite copied')),
+      );
+    }
+  }
+
+  Future<void> _openInviteSite(BuildContext context) async {
+    final uri = Uri.parse(_helperInviteBaseUrl);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Could not open the My Village Pro site.')),
+      );
+    }
+  }
+
+  Future<void> _emailInvite(BuildContext context, Village village) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      queryParameters: {
+        'subject': 'Join my village on My Village Pro',
+        'body': _inviteMessage(village),
+      },
+    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open your email app.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,23 +373,52 @@ class _VillageSummaryCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.vpn_key_outlined, size: 18),
                   const SizedBox(width: 6),
-                  Text('Invite code: ',
-                      style: theme.textTheme.bodyMedium),
+                  Text('Invite code: ', style: theme.textTheme.bodyMedium),
                   SelectableText(
                     village!.inviteCode,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 2),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800, letterSpacing: 2),
                   ),
                   IconButton(
                     tooltip: 'Copy',
                     icon: const Icon(Icons.copy, size: 18),
-                    onPressed: () {
-                      Clipboard.setData(
-                          ClipboardData(text: village!.inviteCode));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Invite code copied')),
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: village!.inviteCode),
                       );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Invite code copied')),
+                        );
+                      }
                     },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Send helpers the app link and invite code together so they land in the right place.',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _copyInvite(context, village!),
+                    icon: const Icon(Icons.share_outlined),
+                    label: const Text('Copy helper invite'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _emailInvite(context, village!),
+                    icon: const Icon(Icons.mail_outline),
+                    label: const Text('Email invite'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _openInviteSite(context),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Open website'),
                   ),
                 ],
               ),
@@ -408,7 +575,10 @@ class _PendingRequestsSection extends ConsumerWidget {
             child: ListTile(
               leading: const Icon(Icons.person_add_alt),
               title: Text(r.displayName),
-              subtitle: Text(r.email),
+              subtitle: Text(
+                '${r.email}\nRequested ${UserRole.fromName(r.requestedRole).label}',
+              ),
+              isThreeLine: true,
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -428,6 +598,88 @@ class _PendingRequestsSection extends ConsumerWidget {
           ),
         const Divider(height: 24),
       ],
+    );
+  }
+}
+
+class _RolePickerTile extends ConsumerStatefulWidget {
+  const _RolePickerTile();
+
+  @override
+  ConsumerState<_RolePickerTile> createState() => _RolePickerTileState();
+}
+
+class _RolePickerTileState extends ConsumerState<_RolePickerTile> {
+  bool _saving = false;
+
+  Future<void> _updateRole(UserRole nextRole) async {
+    final current = ref.read(activeRoleProvider);
+    final user = ref.read(currentUserProvider);
+    if (user == null || nextRole == current) return;
+
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(villageRepositoryProvider)
+          .setMyActiveVillageRole(nextRole.name);
+      ref.invalidate(myVillagesProvider);
+      ref.invalidate(villageMembersProvider);
+      ref.invalidate(currentProfileProvider);
+      ref.invalidate(currentVillageProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Your access in this village is now ${nextRole.label.toLowerCase()}.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update your access: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = ref.watch(activeRoleProvider);
+    final allowedRoles = current == UserRole.admin
+        ? const [UserRole.admin, UserRole.parent, UserRole.helper]
+        : const [UserRole.parent, UserRole.helper];
+
+    return ListTile(
+      leading: const Icon(Icons.badge_outlined),
+      title: const Text('Role (this village)'),
+      subtitle: const Text(
+        'Switch how you participate in the active village.',
+      ),
+      trailing: _saving
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : DropdownButtonHideUnderline(
+              child: DropdownButton<UserRole>(
+                value: current,
+                items: [
+                  for (final role in allowedRoles)
+                    DropdownMenuItem(
+                      value: role,
+                      child: Text(role.label),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  _updateRole(value);
+                },
+              ),
+            ),
     );
   }
 }
@@ -476,11 +728,7 @@ class _ProfileTab extends ConsumerWidget {
           Card(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.badge_outlined),
-                  title: const Text('Role (this village)'),
-                  trailing: Text(ref.watch(activeRoleProvider).label),
-                ),
+                const _RolePickerTile(),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.holiday_village_outlined),

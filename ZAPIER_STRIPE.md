@@ -1,4 +1,4 @@
-# Zapier Forms + Stripe → Village Calendar Premium
+# Zapier Forms + Stripe → My Village Pro Premium
 
 ## How it fits the app (the seam)
 The app unlocks premium purely from **`profiles.subscription_tier = 'premium'`**.
@@ -33,7 +33,7 @@ Zapier forms can't reliably pre-fill hidden fields from the URL, and users don't
 know their Supabase UUID — so **match by email** instead. Make **Email a visible,
 required field** on the form; the Zap passes it to `grant-premium`, which looks
 up the profile by email. The one rule for the customer: use the **same email as
-your Village Calendar login**.
+your My Village Pro login**.
 
 The app's Upgrade button just opens the form URL (optionally append
 `?email=<EMAIL>` — some Interfaces will pre-fill a matching visible field):
@@ -69,13 +69,13 @@ per sale and flips `granted` after the endpoint call succeeds.
 ---
 
 ## Zapier Copilot prompt (paste into Zapier)
-> Build me a subscription checkout for my app "Village Calendar".
+> Build me a subscription checkout for my app "My Village Pro".
 >
 > 1. Create a **Zapier Interface** with a **Form** page at path `/subscribe`
->    titled "Village Calendar Premium". Fields:
+>    titled "My Village Pro Premium". Fields:
 >    - Full name (text, required)
 >    - **Email (email, required, visible)** — this is how customers are matched;
->      they must use their Village Calendar login email.
+>      they must use their My Village Pro login email.
 >    - Plan (dropdown: Monthly, Yearly, Lifetime, required)
 >    - Add **three Stripe payment components** with these prices, and use
 >      **conditional visibility** so only the one matching the selected Plan is
@@ -92,7 +92,7 @@ per sale and flips `granted` after the endpoint call succeeds.
 >    tier (dropdown: premium/free), granted (checkbox), expires_at (date).
 >
 > 3. Create a **Zap**:
->    - **Trigger:** New successful submission of the "Village Calendar Premium"
+>    - **Trigger:** New successful submission of the "My Village Pro Premium"
 >      form (payment completed).
 >    - **Action 1 — Create Record** in the "Village Subscriptions" table with the
 >      submitted fields; set status = "paid", tier = "premium".

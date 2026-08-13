@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/help_request.dart';
+import '../../models/kid_profile.dart';
 import '../../services/google_maps_service.dart';
 import '../../services/setup_services.dart';
 import '../../state/providers.dart';
@@ -25,7 +26,9 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
 
   HelpCategory _category = HelpCategory.schoolPickup;
   DateTime _when = DateTime.now().add(const Duration(hours: 1));
+  DateTime? _until;
   final Set<String> _kidIds = {};
+  final List<ChildScheduleBlock> _childBlocks = [];
   bool _busy = false;
   bool _aiBusy = false;
 
@@ -59,7 +62,31 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
     if (time == null) return;
     setState(() {
       _when = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _until ??= _when.add(const Duration(hours: 1));
     });
+  }
+
+  Future<void> _pickUntil() async {
+    final base = _until ?? _when.add(const Duration(hours: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: base,
+      firstDate: _when,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(base),
+    );
+    if (time == null) return;
+    final end =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (end.isBefore(_when)) {
+      _toast('End time must be after the start time.');
+      return;
+    }
+    setState(() => _until = end);
   }
 
   Future<void> _submit() async {
@@ -74,15 +101,31 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
     }
     setState(() => _busy = true);
     try {
+      final blocks = List<ChildScheduleBlock>.from(_childBlocks);
+      final blockStart = blocks.isEmpty
+          ? _when
+          : blocks
+              .map((block) => block.start)
+              .reduce((a, b) => a.isBefore(b) ? a : b);
+      final blockEnd = blocks.isEmpty
+          ? _until
+          : blocks
+              .map((block) => block.end)
+              .reduce((a, b) => a.isAfter(b) ? a : b);
+      final kidIds = blocks.isNotEmpty
+          ? blocks.map((block) => block.kidId).toSet().toList()
+          : _kidIds.toList();
       final draft = HelpRequestDraft(
         title: _title.text,
         category: _category,
-        scheduledStart: _when,
+        scheduledStart: blockStart,
+        scheduledEnd: blockEnd,
         description: _description.text,
         pickupAddress: _pickup.text,
         dropoffAddress: _dropoff.text,
         specialInstructions: _instructions.text,
-        kidIds: _kidIds.toList(),
+        kidIds: kidIds,
+        childScheduleBlocks: blocks,
       );
       await ref.read(helpRequestRepositoryProvider).create(
             draft,
@@ -108,10 +151,9 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
 
     setState(() => _aiBusy = true);
     try {
-      final draft =
-          await ref.read(aiAssistantServiceProvider).draftHelpRequest(
-                roughPrompt,
-              );
+      final draft = await ref.read(aiAssistantServiceProvider).draftHelpRequest(
+            roughPrompt,
+          );
       if (!mounted) return;
       setState(() {
         _title.text = draft.title;
@@ -212,10 +254,24 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.event),
-              title: const Text('When'),
+              title: const Text('Request start'),
               subtitle: Text(DateFormat('EEE, MMM d · h:mm a').format(_when)),
               trailing: TextButton(
                 onPressed: _busy ? null : _pickWhen,
+                child: const Text('Change'),
+              ),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.schedule),
+              title: const Text('Request end'),
+              subtitle: Text(
+                _until == null
+                    ? 'Optional'
+                    : DateFormat('EEE, MMM d · h:mm a').format(_until!),
+              ),
+              trailing: TextButton(
+                onPressed: _busy ? null : _pickUntil,
                 child: const Text('Change'),
               ),
             ),
@@ -237,10 +293,56 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
                                   _kidIds.add(k.id);
                                 } else {
                                   _kidIds.remove(k.id);
+                                  _childBlocks.removeWhere(
+                                    (block) => block.kidId == k.id,
+                                  );
                                 }
                               }),
                     ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              _ChildScheduleBlocksCard(
+                kids: kids.where((kid) => _kidIds.contains(kid.id)).toList(),
+                blocks: _childBlocks,
+                enabled: !_busy,
+                onAdd: _kidIds.isEmpty
+                    ? null
+                    : () async {
+                        final block = await showDialog<ChildScheduleBlock>(
+                          context: context,
+                          builder: (_) => _ChildBlockDialog(
+                            kids: kids
+                                .where((kid) => _kidIds.contains(kid.id))
+                                .toList(),
+                            initialStart: _when,
+                            initialEnd:
+                                _until ?? _when.add(const Duration(hours: 1)),
+                          ),
+                        );
+                        if (block != null) {
+                          setState(() => _childBlocks.add(block));
+                        }
+                      },
+                onEdit: (index) async {
+                  final block = await showDialog<ChildScheduleBlock>(
+                    context: context,
+                    builder: (_) => _ChildBlockDialog(
+                      kids: kids
+                          .where((kid) => _kidIds.contains(kid.id))
+                          .toList(),
+                      existing: _childBlocks[index],
+                      initialStart: _when,
+                      initialEnd: _until ?? _when.add(const Duration(hours: 1)),
+                    ),
+                  );
+                  if (block != null) {
+                    setState(() => _childBlocks[index] = block);
+                  }
+                },
+                onDelete: (index) {
+                  setState(() => _childBlocks.removeAt(index));
+                },
               ),
             ],
             const SizedBox(height: 12),
@@ -269,8 +371,8 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
               ),
             ],
             const SizedBox(height: 12),
-            _field(_instructions, 'Special instructions',
-                Icons.info_outline, lines: 2),
+            _field(_instructions, 'Special instructions', Icons.info_outline,
+                lines: 2),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: _busy ? null : _submit,
@@ -303,6 +405,257 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
         prefixIcon: Icon(icon),
         border: const OutlineInputBorder(),
       ),
+    );
+  }
+}
+
+class _ChildScheduleBlocksCard extends StatelessWidget {
+  const _ChildScheduleBlocksCard({
+    required this.kids,
+    required this.blocks,
+    required this.enabled,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final List<KidProfile> kids;
+  final List<ChildScheduleBlock> blocks;
+  final bool enabled;
+  final VoidCallback? onAdd;
+  final ValueChanged<int> onEdit;
+  final ValueChanged<int> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    String kidName(String kidId) {
+      for (final kid in kids) {
+        if (kid.id == kidId) return kid.name;
+      }
+      return 'Child';
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Child schedule blocks',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: enabled ? onAdd : null,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Use this when different children need help at different times in the same request.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            if (blocks.isEmpty)
+              Text(
+                'No child-specific blocks yet. The request-level schedule will be used for everyone.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            for (var i = 0; i < blocks.length; i++)
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  title: Text(kidName(blocks[i].kidId)),
+                  subtitle: Text(
+                    '${blocks[i].need}\n'
+                    '${DateFormat('EEE, MMM d · h:mm a').format(blocks[i].start)}'
+                    ' - ${DateFormat('h:mm a').format(blocks[i].end)}',
+                  ),
+                  isThreeLine: true,
+                  trailing: Wrap(
+                    spacing: 4,
+                    children: [
+                      IconButton(
+                        onPressed: enabled ? () => onEdit(i) : null,
+                        icon: const Icon(Icons.edit_outlined),
+                        tooltip: 'Edit block',
+                      ),
+                      IconButton(
+                        onPressed: enabled ? () => onDelete(i) : null,
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Delete block',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChildBlockDialog extends StatefulWidget {
+  const _ChildBlockDialog({
+    required this.kids,
+    required this.initialStart,
+    required this.initialEnd,
+    this.existing,
+  });
+
+  final List<KidProfile> kids;
+  final DateTime initialStart;
+  final DateTime initialEnd;
+  final ChildScheduleBlock? existing;
+
+  @override
+  State<_ChildBlockDialog> createState() => _ChildBlockDialogState();
+}
+
+class _ChildBlockDialogState extends State<_ChildBlockDialog> {
+  late String _kidId = widget.existing?.kidId ??
+      (widget.kids.isNotEmpty ? widget.kids.first.id : '');
+  late DateTime _start = widget.existing?.start ?? widget.initialStart;
+  late DateTime _end = widget.existing?.end ?? widget.initialEnd;
+  late final TextEditingController _need =
+      TextEditingController(text: widget.existing?.need ?? '');
+
+  @override
+  void dispose() {
+    _need.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickStart() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _start,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_start),
+    );
+    if (time == null) return;
+    setState(() {
+      _start =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      if (_end.isBefore(_start)) {
+        _end = _start.add(const Duration(hours: 1));
+      }
+    });
+  }
+
+  Future<void> _pickEnd() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _end,
+      firstDate: _start,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_end),
+    );
+    if (time == null) return;
+    final nextEnd =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (nextEnd.isBefore(_start)) return;
+    setState(() => _end = nextEnd);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+          widget.existing == null ? 'Add child block' : 'Edit child block'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _kidId.isEmpty ? null : _kidId,
+              decoration: const InputDecoration(
+                labelText: 'Child',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final kid in widget.kids)
+                  DropdownMenuItem<String>(
+                    value: kid.id,
+                    child: Text(kid.name),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _kidId = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _need,
+              decoration: const InputDecoration(
+                labelText: 'Need',
+                hintText: 'Pickup from school and bring to practice',
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.play_arrow_outlined),
+              title: const Text('Start'),
+              subtitle: Text(DateFormat('EEE, MMM d · h:mm a').format(_start)),
+              trailing: TextButton(
+                onPressed: _pickStart,
+                child: const Text('Change'),
+              ),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.stop_outlined),
+              title: const Text('End'),
+              subtitle: Text(DateFormat('EEE, MMM d · h:mm a').format(_end)),
+              trailing: TextButton(
+                onPressed: _pickEnd,
+                child: const Text('Change'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_kidId.isEmpty || _need.text.trim().isEmpty) return;
+            Navigator.of(context).pop(
+              ChildScheduleBlock(
+                kidId: _kidId,
+                need: _need.text.trim(),
+                start: _start,
+                end: _end,
+              ),
+            );
+          },
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

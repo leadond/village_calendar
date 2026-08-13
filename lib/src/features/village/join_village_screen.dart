@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/profile.dart';
 import '../../state/providers.dart';
 import '../subscriptions/paywall_screen.dart';
 
@@ -16,6 +17,7 @@ class JoinVillageScreen extends ConsumerStatefulWidget {
 
 class _JoinVillageScreenState extends ConsumerState<JoinVillageScreen> {
   final _code = TextEditingController();
+  UserRole _requestedRole = UserRole.helper;
   bool _busy = false;
   String? _message;
 
@@ -48,7 +50,10 @@ class _JoinVillageScreenState extends ConsumerState<JoinVillageScreen> {
       _message = null;
     });
     try {
-      final result = await ref.read(villageRepositoryProvider).requestToJoin(code);
+      final result = await ref.read(villageRepositoryProvider).requestToJoin(
+            code,
+            requestedRole: _requestedRole.name,
+          );
       if (result.isAlreadyMember) {
         setState(() =>
             _message = 'You are already a member of ${result.villageName}.');
@@ -59,9 +64,9 @@ class _JoinVillageScreenState extends ConsumerState<JoinVillageScreen> {
         ref.invalidate(myPendingJoinProvider);
         ref.invalidate(myVillagesProvider);
         if (mounted) {
-          setState(() => _message =
-              'Request sent to ${result.villageName}. You\'ll get access once '
-              'an admin approves it.');
+          setState(() => _message = 'Request sent to ${result.villageName} as a '
+              '${UserRole.fromName(result.requestedRole).label.toLowerCase()}. '
+              'You\'ll get access once an admin approves it.');
         }
       }
     } catch (e) {
@@ -85,7 +90,8 @@ class _JoinVillageScreenState extends ConsumerState<JoinVillageScreen> {
               children: [
                 const Text(
                   'Enter the invite code for the village you want to join. '
-                  'Each village keeps its own members and data separate.',
+                  'Each village keeps its own members and data separate. '
+                  'You can be a parent in one village and a helper in another.',
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -96,6 +102,31 @@ class _JoinVillageScreenState extends ConsumerState<JoinVillageScreen> {
                     prefixIcon: Icon(Icons.vpn_key_outlined),
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<UserRole>(
+                  initialValue: _requestedRole,
+                  decoration: const InputDecoration(
+                    labelText: 'Join as',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: UserRole.helper,
+                      child: Text('Helper'),
+                    ),
+                    DropdownMenuItem(
+                      value: UserRole.parent,
+                      child: Text('Parent'),
+                    ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() => _requestedRole = value);
+                        },
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
@@ -164,8 +195,7 @@ class VillageSwitcherAction extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(child: Text(v.name)),
-                Text(v.role,
-                    style: Theme.of(context).textTheme.labelSmall),
+                Text(v.role, style: Theme.of(context).textTheme.labelSmall),
               ],
             ),
           ),

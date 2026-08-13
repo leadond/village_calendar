@@ -16,9 +16,8 @@ enum HelpCategory {
   final String value;
   final String label;
 
-  static HelpCategory fromValue(String? v) =>
-      HelpCategory.values.firstWhere((c) => c.value == v,
-          orElse: () => HelpCategory.other);
+  static HelpCategory fromValue(String? v) => HelpCategory.values
+      .firstWhere((c) => c.value == v, orElse: () => HelpCategory.other);
 
   /// Legacy `request_type` enum is limited to babysitting|school-pickup|other.
   String get legacyRequestType {
@@ -50,12 +49,14 @@ enum HelpStatus {
   final String value;
   final String label;
 
-  static HelpStatus fromValue(String? v) =>
-      HelpStatus.values.firstWhere((s) => s.value == v,
-          orElse: () => HelpStatus.open);
+  static HelpStatus fromValue(String? v) => HelpStatus.values
+      .firstWhere((s) => s.value == v, orElse: () => HelpStatus.open);
 
   bool get isActive =>
-      this == claimed || this == confirmed || this == inProgress || this == arrived;
+      this == claimed ||
+      this == confirmed ||
+      this == inProgress ||
+      this == arrived;
   bool get isTerminal => this == completed || this == cancelled;
 }
 
@@ -75,6 +76,7 @@ class HelpRequest {
     this.dropoffAddress,
     this.specialInstructions,
     this.kidIds = const [],
+    this.childScheduleBlocks = const [],
     this.parentConfirmedAt,
     this.helperCheckinAt,
     this.arrivedAtDestinationAt,
@@ -96,6 +98,7 @@ class HelpRequest {
   final String? dropoffAddress;
   final String? specialInstructions;
   final List<String> kidIds;
+  final List<ChildScheduleBlock> childScheduleBlocks;
   final DateTime? parentConfirmedAt;
   final DateTime? helperCheckinAt;
   final DateTime? arrivedAtDestinationAt;
@@ -115,8 +118,9 @@ class HelpRequest {
       title: (map['title'] as String?) ?? '',
       category: HelpCategory.fromValue(map['category'] as String?),
       status: HelpStatus.fromValue(map['status'] as String?),
-      scheduledStart:
-          _dt(map['scheduled_start']) ?? _dt(map['scheduled_at']) ?? DateTime.now(),
+      scheduledStart: _dt(map['scheduled_start']) ??
+          _dt(map['scheduled_at']) ??
+          DateTime.now(),
       villageId: map['village_id'] as String?,
       helperId: map['helper_id'] as String?,
       description: map['description'] as String?,
@@ -124,7 +128,11 @@ class HelpRequest {
       pickupAddress: map['pickup_address'] as String?,
       dropoffAddress: map['dropoff_address'] as String?,
       specialInstructions: map['special_instructions'] as String?,
-      kidIds: (map['kid_ids'] as List?)?.whereType<String>().toList() ?? const [],
+      kidIds:
+          (map['kid_ids'] as List?)?.whereType<String>().toList() ?? const [],
+      childScheduleBlocks: ChildScheduleBlock.listFromDynamic(
+        map['child_schedule_blocks'],
+      ),
       parentConfirmedAt: _dt(map['parent_confirmed_at']),
       helperCheckinAt: _dt(map['helper_checkin_at']),
       arrivedAtDestinationAt: _dt(map['arrived_at_destination_at']),
@@ -139,40 +147,91 @@ class HelpRequestDraft {
     required this.title,
     required this.category,
     required this.scheduledStart,
+    this.scheduledEnd,
     this.description,
     this.pickupAddress,
     this.dropoffAddress,
     this.specialInstructions,
     this.kidIds = const [],
+    this.childScheduleBlocks = const [],
   });
 
   String title;
   HelpCategory category;
   DateTime scheduledStart;
+  DateTime? scheduledEnd;
   String? description;
   String? pickupAddress;
   String? dropoffAddress;
   String? specialInstructions;
   List<String> kidIds;
+  List<ChildScheduleBlock> childScheduleBlocks;
 
   Map<String, dynamic> toColumns() {
     final iso = scheduledStart.toUtc().toIso8601String();
+    final endIso = scheduledEnd?.toUtc().toIso8601String();
     return {
       'title': title.trim(),
       'category': category.value,
       'request_type': category.legacyRequestType, // legacy NOT NULL enum
       'scheduled_at': iso, // legacy NOT NULL
       'scheduled_start': iso,
+      'scheduled_end': endIso,
       'description': _nz(description),
       'pickup_address': _nz(pickupAddress),
       'dropoff_address': _nz(dropoffAddress),
       'special_instructions': _nz(specialInstructions),
       'kid_ids': kidIds,
+      'child_schedule_blocks':
+          childScheduleBlocks.map((block) => block.toColumns()).toList(),
     };
   }
 
   static String? _nz(String? v) =>
       (v == null || v.trim().isEmpty) ? null : v.trim();
+}
+
+class ChildScheduleBlock {
+  const ChildScheduleBlock({
+    required this.kidId,
+    required this.need,
+    required this.start,
+    required this.end,
+  });
+
+  final String kidId;
+  final String need;
+  final DateTime start;
+  final DateTime end;
+
+  factory ChildScheduleBlock.fromMap(Map<String, dynamic> map) {
+    return ChildScheduleBlock(
+      kidId: (map['kid_id'] as String?) ?? '',
+      need: (map['need'] as String?) ?? '',
+      start: DateTime.parse(map['start'] as String).toLocal(),
+      end: DateTime.parse(map['end'] as String).toLocal(),
+    );
+  }
+
+  static List<ChildScheduleBlock> listFromDynamic(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => ChildScheduleBlock.fromMap(
+              Map<String, dynamic>.from(item),
+            ))
+        .where((block) => block.kidId.isNotEmpty)
+        .toList();
+  }
+
+  Map<String, dynamic> toColumns() {
+    return {
+      'kid_id': kidId,
+      'need': need.trim(),
+      'start': start.toUtc().toIso8601String(),
+      'end': end.toUtc().toIso8601String(),
+    };
+  }
 }
 
 class RequestComment {

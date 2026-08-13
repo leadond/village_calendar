@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/services/notification_service.dart';
 import '../../models/help_request.dart';
+import '../../models/kid_profile.dart';
 import '../../repositories/help_request_repository.dart';
 import '../../services/google_maps_service.dart';
 import '../../services/setup_services.dart';
@@ -89,9 +92,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     if (text.isEmpty) return;
     _comment.clear();
     try {
-      await ref
-          .read(helpRequestRepositoryProvider)
-          .addComment(_req.id, text);
+      await ref.read(helpRequestRepositoryProvider).addComment(_req.id, text);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -100,10 +101,93 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     }
   }
 
+  Future<void> _addToCalendar(List<KidProfile> kids) async {
+    final end =
+        _req.scheduledEnd ?? _req.scheduledStart.add(const Duration(hours: 1));
+    final kidNames = _kidNames(kids);
+    final details = <String>[
+      if (kidNames.isNotEmpty) 'Kids: $kidNames',
+      if (_req.description?.isNotEmpty == true) _req.description!,
+      if (_req.specialInstructions?.isNotEmpty == true)
+        _req.specialInstructions!,
+    ].join('\n\n');
+    final uri = Uri.https(
+      'calendar.google.com',
+      '/calendar/render',
+      {
+        'action': 'TEMPLATE',
+        'text': _req.title,
+        'dates':
+            '${_calendarStamp(_req.scheduledStart)}/${_calendarStamp(end)}',
+        'details': details,
+        'location': _req.dropoffAddress ?? _req.pickupAddress ?? '',
+      },
+    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (mounted && !launched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open calendar app.')),
+      );
+    }
+  }
+
+  Future<void> _scheduleReminder(List<KidProfile> kids) async {
+    final reminderAt =
+        _req.scheduledStart.subtract(const Duration(minutes: 30));
+    final now = DateTime.now();
+    if (!reminderAt.isAfter(now)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'This assignment starts too soon for a 30-minute reminder.'),
+          ),
+        );
+      }
+      return;
+    }
+    final kidNames = _kidNames(kids);
+    await NotificationService.instance.scheduleAssignmentReminder(
+      id: _req.id.hashCode & 0x7fffffff,
+      title: 'Assignment reminder',
+      body: kidNames.isEmpty ? _req.title : 'For $kidNames: ${_req.title}',
+      reminderTime: reminderAt,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reminder set for ${DateFormat('MMM d · h:mm a').format(reminderAt)}.',
+          ),
+        ),
+      );
+    }
+  }
+
+  String _kidNames(List<KidProfile> kids) {
+    final names = kids
+        .where((kid) => _req.kidIds.contains(kid.id))
+        .map((kid) => kid.name)
+        .toList(growable: false);
+    return names.join(', ');
+  }
+
+  String _calendarStamp(DateTime dt) {
+    final utc = dt.toUtc();
+    final month = utc.month.toString().padLeft(2, '0');
+    final day = utc.day.toString().padLeft(2, '0');
+    final hour = utc.hour.toString().padLeft(2, '0');
+    final minute = utc.minute.toString().padLeft(2, '0');
+    final second = utc.second.toString().padLeft(2, '0');
+    return '${utc.year}$month${day}T$hour$minute${second}Z';
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = ref.read(helpRequestRepositoryProvider);
     final names = ref.watch(memberNameLookupProvider);
+    final villageKids =
+        ref.watch(villageKidsProvider).value ?? const <KidProfile>[];
     final theme = Theme.of(context);
 
     final canChat = _req.helperId != null && (_isCreator || _isHelper);
@@ -136,16 +220,21 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     const SizedBox(width: 8),
                     Chip(
                       label: Text(_req.status.label),
-                      backgroundColor:
-                          theme.colorScheme.primaryContainer,
+                      backgroundColor: theme.colorScheme.primaryContainer,
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                _info(Icons.event, 'When',
-                    DateFormat('EEE, MMM d · h:mm a').format(_req.scheduledStart)),
+                _info(
+                    Icons.event,
+                    'When',
+                    DateFormat('EEE, MMM d · h:mm a')
+                        .format(_req.scheduledStart)),
                 _info(Icons.person, 'Requested by',
                     names[_req.creatorId] ?? (_isCreator ? 'You' : 'Member')),
+                if (_req.kidIds.isNotEmpty)
+                  _info(Icons.child_care_outlined, 'Kids',
+                      _kidNames(villageKids)),
                 if (_req.helperId != null)
                   _info(Icons.volunteer_activism, 'Helper',
                       names[_req.helperId] ?? (_isHelper ? 'You' : 'Member')),
@@ -162,10 +251,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 if (_req.specialInstructions?.isNotEmpty == true)
                   _info(Icons.info_outline, 'Instructions',
                       _req.specialInstructions!),
+                if (_req.childScheduleBlocks.isNotEmpty)
+                  _childScheduleBlocks(villageKids),
                 const SizedBox(height: 8),
                 _timeline(),
                 const SizedBox(height: 16),
-                ..._actions(repo),
+                ..._actions(repo, villageKids),
                 if (_trackingActive) ...[
                   const SizedBox(height: 12),
                   if (_isHelper) HelperLiveShare(request: _req),
@@ -196,8 +287,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: Theme.of(context).textTheme.labelSmall),
+                Text(label, style: Theme.of(context).textTheme.labelSmall),
                 Text(value, style: Theme.of(context).textTheme.bodyMedium),
               ],
             ),
@@ -210,9 +300,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   Widget _timeline() {
     final steps = <(String, bool)>[
       ('Confirmed', _req.parentConfirmedAt != null),
-      ('On the way', _req.status == HelpStatus.inProgress ||
-          _req.status == HelpStatus.arrived ||
-          _req.status == HelpStatus.completed),
+      (
+        'On the way',
+        _req.status == HelpStatus.inProgress ||
+            _req.status == HelpStatus.arrived ||
+            _req.status == HelpStatus.completed
+      ),
       ('Arrived pickup', _req.helperCheckinAt != null),
       ('At destination', _req.arrivedAtDestinationAt != null),
       ('Completed', _req.parentReceiptConfirmedAt != null),
@@ -232,6 +325,42 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             visualDensity: VisualDensity.compact,
           ),
       ],
+    );
+  }
+
+  Widget _childScheduleBlocks(List<KidProfile> myKids) {
+    String kidName(String kidId) {
+      for (final kid in myKids) {
+        if (kid.id == kidId) return kid.name;
+      }
+      return 'Child';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Child schedule blocks',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          for (final block in _req.childScheduleBlocks)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.child_care_outlined),
+                title: Text(kidName(block.kidId)),
+                subtitle: Text(
+                  '${block.need}\n'
+                  '${DateFormat('EEE, MMM d · h:mm a').format(block.start)}'
+                  ' - ${DateFormat('h:mm a').format(block.end)}',
+                ),
+                isThreeLine: true,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -290,12 +419,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
-  List<Widget> _actions(HelpRequestRepository repo) {
+  List<Widget> _actions(HelpRequestRepository repo, List<KidProfile> kids) {
     final status = _req.status;
     final buttons = <Widget>[];
 
-    void add(String label, IconData icon, Future<void> Function() fn,
-        String ok) {
+    void add(
+        String label, IconData icon, Future<void> Function() fn, String ok) {
       buttons.add(Padding(
         padding: const EdgeInsets.only(top: 8),
         child: FilledButton.icon(
@@ -311,8 +440,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         add('Cancel request', Icons.close,
             () => repo.cancel(_req.id, byUserId: _myId!), 'Request cancelled');
       } else {
-        add('Claim this request', Icons.pan_tool_alt,
-            () => repo.claim(_req.id), 'Claimed — waiting for confirmation');
+        add('Claim this request', Icons.pan_tool_alt, () => repo.claim(_req.id),
+            'Claimed — waiting for confirmation');
       }
     } else if (status == HelpStatus.claimed) {
       if (_isCreator) {
@@ -331,8 +460,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       }
     } else if (status == HelpStatus.inProgress) {
       if (_isHelper) {
-        add('Arrived at pickup', Icons.flag,
-            () => repo.arrivePickup(_req.id), 'Checked in at pickup');
+        add('Arrived at pickup', Icons.flag, () => repo.arrivePickup(_req.id),
+            'Checked in at pickup');
       }
     } else if (status == HelpStatus.arrived) {
       if (_isHelper && _req.arrivedAtDestinationAt == null) {
@@ -346,19 +475,40 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     }
 
     // Allow cancel while still cancellable.
-    if ((status == HelpStatus.claimed ||
-            status == HelpStatus.confirmed) &&
+    if ((status == HelpStatus.claimed || status == HelpStatus.confirmed) &&
         _isCreator) {
       buttons.add(Padding(
         padding: const EdgeInsets.only(top: 8),
         child: OutlinedButton.icon(
           onPressed: _busy
               ? null
-              : () => _run(
-                  () => repo.cancel(_req.id, byUserId: _myId!),
+              : () => _run(() => repo.cancel(_req.id, byUserId: _myId!),
                   'Request cancelled'),
           icon: const Icon(Icons.close),
           label: const Text('Cancel request'),
+        ),
+      ));
+    }
+
+    if (_isHelper &&
+        (status == HelpStatus.claimed ||
+            status == HelpStatus.confirmed ||
+            status == HelpStatus.inProgress ||
+            status == HelpStatus.arrived)) {
+      buttons.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: OutlinedButton.icon(
+          onPressed: _busy ? null : () => _addToCalendar(kids),
+          icon: const Icon(Icons.calendar_month),
+          label: const Text('Add to calendar'),
+        ),
+      ));
+      buttons.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: OutlinedButton.icon(
+          onPressed: _busy ? null : () => _scheduleReminder(kids),
+          icon: const Icon(Icons.alarm_add_outlined),
+          label: const Text('Set 30-minute reminder'),
         ),
       ));
     }

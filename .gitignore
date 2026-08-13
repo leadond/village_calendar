@@ -54,3 +54,13 @@ test_out.txt
 
 # secrets
 .env
+
+.env.local
+
+.firebase/
+
+node_modules/
+
+.next/
+
+flutter_01.png

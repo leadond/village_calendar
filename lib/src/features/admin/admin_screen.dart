@@ -80,7 +80,8 @@ class _AdminStatsSection extends ConsumerWidget {
 
     return statsAsync.when(
       loading: () => const _SectionLoading(),
-      error: (error, _) => _SectionError(message: 'Could not load stats.\n$error'),
+      error: (error, _) =>
+          _SectionError(message: 'Could not load stats.\n$error'),
       data: (stats) {
         final items = [
           _StatItem(
@@ -157,11 +158,12 @@ class _AdminStatsSection extends ConsumerWidget {
                         ),
                         Text(
                           item.label,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
                       ],
                     ),
@@ -197,7 +199,8 @@ class _PendingApprovalsSection extends ConsumerWidget {
               _SectionError(message: 'Could not load join requests.\n$error'),
           data: (requests) {
             if (requests.isEmpty) {
-              return const _EmptyCard(message: 'No pending join requests right now.');
+              return const _EmptyCard(
+                  message: 'No pending join requests right now.');
             }
 
             return Column(
@@ -215,7 +218,9 @@ class _PendingApprovalsSection extends ConsumerWidget {
                       ),
                       title: Text(request.displayName),
                       subtitle: Text(
-                        '${request.email}\nRequested ${DateFormat('MMM d, h:mm a').format(request.createdAt)}',
+                        '${request.email}\n'
+                        'Requested ${UserRole.fromName(request.requestedRole).label} • '
+                        '${DateFormat('MMM d, h:mm a').format(request.createdAt)}',
                       ),
                       isThreeLine: true,
                       trailing: Wrap(
@@ -223,7 +228,8 @@ class _PendingApprovalsSection extends ConsumerWidget {
                         children: [
                           IconButton(
                             tooltip: 'Approve',
-                            icon: const Icon(Icons.check_circle, color: Colors.green),
+                            icon: const Icon(Icons.check_circle,
+                                color: Colors.green),
                             onPressed: () => _handleRequestAction(
                               context,
                               ref,
@@ -271,7 +277,10 @@ class _PendingApprovalsSection extends ConsumerWidget {
       ref.invalidate(adminDashboardStatsProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(approve ? 'Join request approved.' : 'Join request rejected.')),
+          SnackBar(
+              content: Text(approve
+                  ? 'Join request approved.'
+                  : 'Join request rejected.')),
         );
       }
     } catch (error) {

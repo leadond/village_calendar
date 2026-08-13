@@ -11,26 +11,30 @@ class NotificationRepository {
     return _client
         .from('notifications')
         .stream(primaryKey: ['id'])
-        .eq('recipient_id', userId)
         .order('created_at', ascending: false)
         .map((rows) => rows
+            .where((row) =>
+                row['recipient_id'] == userId || row['user_id'] == userId)
             .map((r) => AppNotification.fromMap(Map<String, dynamic>.from(r)))
             .toList());
   }
 
   Future<void> markRead(String id) async {
-    await _client
-        .from('notifications')
-        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
-        .eq('id', id);
+    await _client.from('notifications').update({
+      'read_at': DateTime.now().toUtc().toIso8601String(),
+      'is_read': true,
+    }).eq('id', id);
   }
 
   Future<void> markAllRead(String userId) async {
     await _client
         .from('notifications')
-        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
-        .eq('recipient_id', userId)
-        .isFilter('read_at', null);
+        .update({
+          'read_at': DateTime.now().toUtc().toIso8601String(),
+          'is_read': true,
+        })
+        .or('recipient_id.eq.$userId,user_id.eq.$userId')
+        .or('read_at.is.null,is_read.eq.false');
   }
 
   /// Saves the device's FCM token so the backend can push to this user.

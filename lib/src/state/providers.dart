@@ -63,7 +63,8 @@ final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return SetupServices.supabaseClient;
 });
 
-final adminDashboardStatsProvider = FutureProvider<AdminDashboardStats>((ref) async {
+final adminDashboardStatsProvider =
+    FutureProvider<AdminDashboardStats>((ref) async {
   final profile = await ref.watch(currentProfileProvider.future);
   final role = ref.watch(activeRoleProvider);
 
@@ -143,6 +144,12 @@ final myKidsProvider = FutureProvider<List<KidProfile>>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const <KidProfile>[];
   return ref.watch(kidRepositoryProvider).listForParent(user.id);
+});
+
+final villageKidsProvider = FutureProvider<List<KidProfile>>((ref) async {
+  final profile = await ref.watch(currentProfileProvider.future);
+  if (profile == null || !profile.hasVillage) return const <KidProfile>[];
+  return ref.watch(kidRepositoryProvider).listForVillage(profile.villageId!);
 });
 
 final helpRequestRepositoryProvider = Provider<HelpRequestRepository>((ref) {
@@ -293,7 +300,9 @@ final directMessagesProvider = StreamProvider<List<DirectMessage>>((ref) {
   if (profile == null || !profile.hasVillage) {
     return Stream.value(const <DirectMessage>[]);
   }
-  return ref.watch(directMessageRepositoryProvider).streamAll(profile.villageId!);
+  return ref
+      .watch(directMessageRepositoryProvider)
+      .streamAll(profile.villageId!);
 });
 
 /// Unread direct-message count (messages sent to me, not yet read).
@@ -317,7 +326,8 @@ final availabilityRepositoryProvider = Provider<AvailabilityRepository>((ref) {
 });
 
 /// The signed-in user's own availability/work blocks.
-final myAvailabilityProvider = FutureProvider<List<AvailabilityBlock>>((ref) async {
+final myAvailabilityProvider =
+    FutureProvider<List<AvailabilityBlock>>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const <AvailabilityBlock>[];
   return ref.watch(availabilityRepositoryProvider).forUser(user.id);
@@ -330,7 +340,9 @@ final villageAvailabilityProvider =
   if (profile == null || !profile.hasVillage) {
     return const <AvailabilityBlock>[];
   }
-  return ref.watch(availabilityRepositoryProvider).forVillage(profile.villageId!);
+  return ref
+      .watch(availabilityRepositoryProvider)
+      .forVillage(profile.villageId!);
 });
 
 /// Non-draft requests for a given week (Monday-anchored) in the active village.
@@ -365,7 +377,8 @@ final currentVillageProvider = FutureProvider<Village?>((ref) async {
 final villageMembersProvider = FutureProvider<List<Profile>>((ref) async {
   final profile = await ref.watch(currentProfileProvider.future);
   if (profile == null || !profile.hasVillage) return const <Profile>[];
-  final rows = await ref.watch(villageRepositoryProvider).activeVillageMembers();
+  final rows =
+      await ref.watch(villageRepositoryProvider).activeVillageMembers();
   return rows.map(Profile.fromMap).toList();
 });
 

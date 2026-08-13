@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-primary: #2F6F5E;
+  --color-primary-light: #4A9F8B;
+  --color-primary-dark: #1F4F43;
+  --color-accent: #F59E0B;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Mobile-friendly scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}

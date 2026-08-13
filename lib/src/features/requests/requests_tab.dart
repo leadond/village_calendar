@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/help_request.dart';
+import '../../models/kid_profile.dart';
 import '../../state/providers.dart';
+import '../kids/kids_tab.dart';
 import 'care_scheduler.dart';
 import 'create_request_screen.dart';
 import 'request_detail_screen.dart';
@@ -68,7 +70,8 @@ class _RequestsTabState extends ConsumerState<RequestsTab> {
               onSelectionChanged: (s) => setState(() => _available = s.first),
             ),
           ),
-          Expanded(child: _available ? const _AvailableList() : const _MineList()),
+          Expanded(
+              child: _available ? const _AvailableList() : const _MineList()),
         ],
       ),
     );
@@ -86,7 +89,8 @@ class _MineList extends ConsumerWidget {
       error: (e, _) => Center(child: Text('Could not load.\n$e')),
       data: (all) {
         if (all.isEmpty) {
-          return const _Empty('No requests yet. Tap "New request" to create one.');
+          return const _Empty(
+              'No requests yet. Tap "New request" to create one.');
         }
         final active = all.where((r) => r.status.isActive).toList();
         final open = all.where((r) => r.status == HelpStatus.open).toList();
@@ -151,22 +155,34 @@ class _AvailableList extends ConsumerWidget {
   }
 }
 
-class RequestCard extends StatelessWidget {
+class RequestCard extends ConsumerWidget {
   const RequestCard({super.key, required this.request, this.subtitle});
 
   final HelpRequest request;
   final String? subtitle;
 
   @override
-  Widget build(BuildContext context) {
-    final when = DateFormat('EEE, MMM d · h:mm a').format(request.scheduledStart);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final when =
+        DateFormat('EEE, MMM d · h:mm a').format(request.scheduledStart);
+    final kids = ref.watch(villageKidsProvider).value ?? const <KidProfile>[];
+    final requestKids = kids
+        .where((kid) => request.kidIds.contains(kid.id))
+        .toList(growable: false);
+    final kidNames = requestKids.map((kid) => kid.name).join(', ');
+    final lines = <String>[
+      '${request.category.label} · $when',
+      if (kidNames.isNotEmpty) 'Kids: $kidNames',
+      if (subtitle != null) subtitle!,
+    ];
     return Card(
       child: ListTile(
-        leading: CircleAvatar(child: Icon(_iconFor(request.category))),
+        leading: requestKids.isEmpty
+            ? CircleAvatar(child: Icon(_iconFor(request.category)))
+            : _KidAssignmentAvatar(kids: requestKids),
         title: Text(request.title),
-        subtitle: Text('${request.category.label} · $when'
-            '${subtitle != null ? '\n$subtitle' : ''}'),
-        isThreeLine: subtitle != null,
+        subtitle: Text(lines.join('\n')),
+        isThreeLine: lines.length > 1,
         trailing: Chip(
           label: Text(request.status.label),
           visualDensity: VisualDensity.compact,
@@ -202,6 +218,48 @@ class RequestCard extends StatelessWidget {
       case HelpCategory.other:
         return Icons.help_outline;
     }
+  }
+}
+
+class _KidAssignmentAvatar extends StatelessWidget {
+  const _KidAssignmentAvatar({required this.kids});
+
+  final List<KidProfile> kids;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = kids.take(2).toList(growable: false);
+    if (visible.length == 1) {
+      return KidPhotoAvatar(
+          stored: visible.first.photoUrl, fallback: visible.first.name);
+    }
+
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 6,
+            child: KidPhotoAvatar(
+              stored: visible.first.photoUrl,
+              fallback: visible.first.name,
+              radius: 14,
+            ),
+          ),
+          Positioned(
+            right: 0,
+            top: 0,
+            child: KidPhotoAvatar(
+              stored: visible.last.photoUrl,
+              fallback: visible.last.name,
+              radius: 14,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

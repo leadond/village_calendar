@@ -25,6 +25,17 @@ class KidRepository {
         .toList();
   }
 
+  Future<List<KidProfile>> listForVillage(String villageId) async {
+    final rows = await _client
+        .from('kid_profiles')
+        .select(_columns)
+        .eq('village_id', villageId)
+        .order('name', ascending: true);
+    return rows
+        .map((r) => KidProfile.fromMap(Map<String, dynamic>.from(r)))
+        .toList();
+  }
+
   Future<KidProfile> create(KidDraft draft, {String? villageId}) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -64,8 +75,7 @@ class KidRepository {
     required Uint8List bytes,
     String extension = 'jpg',
   }) async {
-    final path =
-        '$userId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.$extension';
     await _client.storage.from(_bucket).uploadBinary(
           path,
           bytes,

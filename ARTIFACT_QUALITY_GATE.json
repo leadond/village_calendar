@@ -1,0 +1,28 @@
+{
+  "ranAt": "2026-08-05T15:41:28.676Z",
+  "checks": {
+    "unit": "fail",
+    "migration": "pass",
+    "security": "pass",
+    "pipeline": "fail",
+    "e2e": "fail"
+  },
+  "commandResults": [
+    {
+      "label": "unit",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "label": "pipeline",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "label": "e2e",
+      "ok": false,
+      "detail": ""
+    }
+  ],
+  "passed": false
+}

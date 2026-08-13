@@ -1,10 +1,11 @@
 /// Result of asking to join a village by invite code.
 class JoinRequestResult {
-  const JoinRequestResult(this.status, {this.villageName});
+  const JoinRequestResult(this.status, {this.villageName, this.requestedRole});
 
   /// One of: not_found, already_member, pending, error.
   final String status;
   final String? villageName;
+  final String? requestedRole;
 
   bool get isPending => status == 'pending';
   bool get isAlreadyMember => status == 'already_member';
@@ -32,6 +33,7 @@ class JoinRequestItem {
     required this.displayName,
     required this.email,
     required this.createdAt,
+    required this.requestedRole,
   });
 
   final String requestId;
@@ -39,4 +41,5 @@ class JoinRequestItem {
   final String displayName;
   final String email;
   final DateTime createdAt;
+  final String requestedRole;
 }

@@ -1,4 +1,4 @@
-# RevenueCat — Web (Village Calendar Pro)
+# RevenueCat — Web (My Village Pro)
 
 ## Important: which SDK
 Your app is **Flutter**. RevenueCat has two SDKs:
@@ -32,7 +32,7 @@ npm install in a JS build and import it there instead.
    RevenueCat → Account/Project settings → connect your Stripe account.
 2. **Create a Web Billing app** in the project (choose the connected Stripe account).
 3. **Entitlement**: create one with identifier **`pro`** (display name
-   "Village Calendar Pro"). The app checks this id (override with
+   "My Village Pro"). The app checks this id (override with
    `--dart-define=REVENUECAT_ENTITLEMENT_ID=...` if you name it differently).
 4. **Products** (Web Billing): create `monthly`, `yearly`, `lifetime`, each
    attached to the `pro` entitlement.
@@ -79,7 +79,7 @@ const purchases = Purchases.configure({
 async function isPro() {
   try {
     const info = await Purchases.getSharedInstance().getCustomerInfo();
-    return "pro" in info.entitlements.active;      // "Village Calendar Pro"
+    return "pro" in info.entitlements.active;      // "My Village Pro"
   } catch (e) { console.error(e); return false; }
 }
 

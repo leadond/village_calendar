@@ -46,7 +46,8 @@ class VillageRepository {
 
   /// Switches which village is active (scopes all data to it).
   Future<void> switchActiveVillage(String villageId) async {
-    await _client.rpc('switch_active_village', params: {'p_village': villageId});
+    await _client
+        .rpc('switch_active_village', params: {'p_village': villageId});
   }
 
   /// Members of the active village, each with their role in this village.
@@ -58,18 +59,24 @@ class VillageRepository {
 
   /// Requests to join the village with [inviteCode]. Creates a pending request
   /// for a village admin to approve (membership is NOT granted immediately).
-  Future<JoinRequestResult> requestToJoin(String inviteCode) async {
+  Future<JoinRequestResult> requestToJoin(
+    String inviteCode, {
+    String requestedRole = 'helper',
+  }) async {
     final code = inviteCode.trim().toUpperCase();
     if (code.isEmpty) return const JoinRequestResult('not_found');
 
-    final res = await _client
-        .rpc('request_to_join_village', params: {'p_code': code});
+    final res = await _client.rpc('request_to_join_village', params: {
+      'p_code': code,
+      'p_requested_role': requestedRole,
+    });
     final map = (res is Map)
         ? Map<String, dynamic>.from(res)
         : const <String, dynamic>{};
     return JoinRequestResult(
       (map['status'] as String?) ?? 'error',
       villageName: map['village_name'] as String?,
+      requestedRole: map['requested_role'] as String?,
     );
   }
 
@@ -97,16 +104,19 @@ class VillageRepository {
         displayName: (m['display_name'] as String?) ?? '',
         email: (m['email'] as String?) ?? '',
         createdAt: DateTime.parse(m['created_at'] as String).toLocal(),
+        requestedRole: (m['requested_role'] as String?) ?? 'helper',
       );
     }).toList();
   }
 
   Future<void> approveJoin(String requestId) async {
-    await _client.rpc('approve_join_request', params: {'p_request_id': requestId});
+    await _client
+        .rpc('approve_join_request', params: {'p_request_id': requestId});
   }
 
   Future<void> rejectJoin(String requestId) async {
-    await _client.rpc('reject_join_request', params: {'p_request_id': requestId});
+    await _client
+        .rpc('reject_join_request', params: {'p_request_id': requestId});
   }
 
   /// Requester cancels their own pending request.
@@ -116,8 +126,12 @@ class VillageRepository {
 
   // ---- admin (active village) ----
   Future<void> setMemberRole(String userId, String role) async {
-    await _client.rpc('set_member_role',
-        params: {'p_user': userId, 'p_role': role});
+    await _client
+        .rpc('set_member_role', params: {'p_user': userId, 'p_role': role});
+  }
+
+  Future<void> setMyActiveVillageRole(String role) async {
+    await _client.rpc('set_my_active_village_role', params: {'p_role': role});
   }
 
   Future<void> removeMember(String userId) async {

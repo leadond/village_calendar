@@ -1,4 +1,4 @@
-# Village Calendar — Production Setup
+# My Village Pro — Production Setup
 
 Everything below is **code-complete and (where possible) already deployed**. Each
 section is the one remaining step that needs *your* account/key. Do them in any
@@ -21,7 +21,7 @@ Get a key at https://resend.com/api-keys and a Supabase token at
 https://supabase.com/dashboard/account/tokens, then:
 ```powershell
 ./scripts/configure-email-auth.ps1 -ResendApiKey "re_xxx" -SupabaseAccessToken "sbp_xxx" `
-    -SenderEmail "no-reply@yourdomain.com" -SenderName "Village Calendar"
+    -SenderEmail "no-reply@yourdomain.com" -SenderName "My Village Pro"
 ```
 Verify your domain at https://resend.com/domains. Add `-RequireEmailConfirmation`
 for production, and then drop the dev auto-confirm trigger (the script prints the line).
