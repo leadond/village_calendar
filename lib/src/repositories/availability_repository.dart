@@ -59,6 +59,45 @@ class AvailabilityRepository {
     });
   }
 
+  /// Adds one date-specific block per day in the inclusive [startDate]..[endDate]
+  /// range (used for vacations / multi-day availability or blackouts). Inserted
+  /// as a single batch. Capped at 366 days to avoid pathological inserts.
+  Future<void> addRange({
+    required String villageId,
+    required String kind,
+    required int startMinutes,
+    required int endMinutes,
+    required DateTime startDate,
+    required DateTime endDate,
+    String? note,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw const AuthException('You must be signed in.');
+    var day = DateTime(startDate.year, startDate.month, startDate.day);
+    final last = DateTime(endDate.year, endDate.month, endDate.day);
+    if (last.isBefore(day)) return;
+    final rows = <Map<String, dynamic>>[];
+    var guard = 0;
+    while (!day.isAfter(last) && guard < 366) {
+      rows.add({
+        'user_id': user.id,
+        'village_id': villageId,
+        'kind': kind,
+        'weekday': null,
+        'specific_date': '${day.year.toString().padLeft(4, '0')}-'
+            '${day.month.toString().padLeft(2, '0')}-'
+            '${day.day.toString().padLeft(2, '0')}',
+        'start_time': _fmt(startMinutes),
+        'end_time': _fmt(endMinutes),
+        'note': note,
+      });
+      day = day.add(const Duration(days: 1));
+      guard++;
+    }
+    if (rows.isEmpty) return;
+    await _client.from('availability_blocks').insert(rows);
+  }
+
   Future<void> delete(String id) async {
     await _client.from('availability_blocks').delete().eq('id', id);
   }

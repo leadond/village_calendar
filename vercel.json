@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "git clone --depth 1 -b stable https://github.com/flutter/flutter.git _flutter && _flutter/bin/flutter config --enable-web && _flutter/bin/flutter pub get",
-  "buildCommand": "_flutter/bin/flutter build web --release --dart-define=SUPABASE_URL=https://fmeizeyqwjieapfqgicl.supabase.co --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtZWl6ZXlxd2ppZWFwZnFnaWNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMTMzMzUsImV4cCI6MjA4NTU4OTMzNX0.MbcDkt5b6XlTVL3tzTrjjJldeCag_GrfhItIhmnaFGU --dart-define=REVENUECAT_WEB_API_KEY=test_qeVgqUcpbgLSQIRIiKClErHwoyh --dart-define=REVENUECAT_ENTITLEMENT_ID=pro",
+  "buildCommand": "_flutter/bin/flutter build web --release --dart-define-from-file=dart_defines.json",
   "outputDirectory": "build/web",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

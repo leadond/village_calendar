@@ -5,6 +5,8 @@ import '../../models/availability_block.dart';
 import '../../models/profile.dart';
 import '../../state/providers.dart';
 
+enum _DateMode { weekly, oneDay, range }
+
 const _kindLabels = {
   'work': 'Work (need coverage)',
   'available': 'Available to help',
@@ -103,8 +105,9 @@ class _AddAvailabilitySheet extends ConsumerStatefulWidget {
 class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
   late String _kind = widget.defaultKind;
   final Set<int> _weekdays = {DateTime.now().weekday % 7};
-  bool _useSpecificDate = false;
+  _DateMode _mode = _DateMode.weekly;
   DateTime? _specificDate;
+  DateTimeRange? _range;
   TimeOfDay _start = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _end = const TimeOfDay(hour: 17, minute: 0);
   final _note = TextEditingController();
@@ -121,10 +124,16 @@ class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
   Future<void> _save() async {
     final profile = ref.read(currentProfileProvider).value;
     if (profile == null || !profile.hasVillage) return;
-    if (!_useSpecificDate && _weekdays.isEmpty) return;
-    if (_useSpecificDate && _specificDate == null) {
+    if (_mode == _DateMode.weekly && _weekdays.isEmpty) return;
+    if (_mode == _DateMode.oneDay && _specificDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pick a date.')),
+      );
+      return;
+    }
+    if (_mode == _DateMode.range && _range == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a start and end date.')),
       );
       return;
     }
@@ -138,13 +147,23 @@ class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
     try {
       final repo = ref.read(availabilityRepositoryProvider);
       final note = _note.text.trim().isEmpty ? null : _note.text.trim();
-      if (_useSpecificDate) {
+      if (_mode == _DateMode.oneDay) {
         await repo.add(
           villageId: profile.villageId!,
           kind: _kind,
           startMinutes: _mins(_start),
           endMinutes: _mins(_end),
           specificDate: _specificDate,
+          note: note,
+        );
+      } else if (_mode == _DateMode.range) {
+        await repo.addRange(
+          villageId: profile.villageId!,
+          kind: _kind,
+          startMinutes: _mins(_start),
+          endMinutes: _mins(_end),
+          startDate: _range!.start,
+          endDate: _range!.end,
           note: note,
         );
       } else {
@@ -200,17 +219,18 @@ class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
             ],
           ),
           const SizedBox(height: 12),
-          SegmentedButton<bool>(
+          SegmentedButton<_DateMode>(
             segments: const [
-              ButtonSegment(value: false, label: Text('Weekly')),
-              ButtonSegment(value: true, label: Text('Specific date')),
+              ButtonSegment(value: _DateMode.weekly, label: Text('Weekly')),
+              ButtonSegment(value: _DateMode.oneDay, label: Text('One day')),
+              ButtonSegment(value: _DateMode.range, label: Text('Range')),
             ],
-            selected: {_useSpecificDate},
-            onSelectionChanged: (s) =>
-                setState(() => _useSpecificDate = s.first),
+            selected: {_mode},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => setState(() => _mode = s.first),
           ),
           const SizedBox(height: 8),
-          if (_useSpecificDate)
+          if (_mode == _DateMode.oneDay)
             OutlinedButton.icon(
               icon: const Icon(Icons.event),
               label: Text(_specificDate == null
@@ -225,6 +245,25 @@ class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
                   lastDate: now.add(const Duration(days: 365)),
                 );
                 if (picked != null) setState(() => _specificDate = picked);
+              },
+            )
+          else if (_mode == _DateMode.range)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.date_range),
+              label: Text(_range == null
+                  ? 'Pick a date range'
+                  : '${_range!.start.month}/${_range!.start.day} – '
+                      '${_range!.end.month}/${_range!.end.day}/${_range!.end.year}'),
+              onPressed: () async {
+                final now = DateTime.now();
+                final picked = await showDateRangePicker(
+                  context: context,
+                  initialDateRange: _range,
+                  firstDate: DateTime(now.year, now.month, now.day),
+                  lastDate: now.add(const Duration(days: 365)),
+                  helpText: 'Select start and end dates',
+                );
+                if (picked != null) setState(() => _range = picked);
               },
             )
           else ...[

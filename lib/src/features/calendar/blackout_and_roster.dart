@@ -20,7 +20,7 @@ class BlackoutDatesScreen extends ConsumerWidget {
         heroTag: 'blackout-add-fab',
         onPressed: () => _addDate(context, ref),
         icon: const Icon(Icons.event_busy),
-        label: const Text('Add date'),
+        label: const Text('Add dates'),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -79,21 +79,22 @@ class BlackoutDatesScreen extends ConsumerWidget {
     final profile = ref.read(currentProfileProvider).value;
     if (profile == null || !profile.hasVillage) return;
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: now,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: now.add(const Duration(days: 365)),
-      helpText: 'Pick a day you are unavailable',
+      helpText: 'Pick the days you are unavailable',
+      saveText: 'Done',
     );
     if (picked == null) return;
     try {
-      await ref.read(availabilityRepositoryProvider).add(
+      await ref.read(availabilityRepositoryProvider).addRange(
             villageId: profile.villageId!,
             kind: 'unavailable',
             startMinutes: 0,
             endMinutes: 1439,
-            specificDate: picked,
+            startDate: picked.start,
+            endDate: picked.end,
             note: 'Blackout',
           );
       ref.invalidate(myAvailabilityProvider);
