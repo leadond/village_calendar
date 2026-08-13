@@ -7,6 +7,7 @@ import '../../models/help_request.dart';
 import '../../state/providers.dart';
 import '../requests/request_detail_screen.dart';
 import 'availability_screen.dart';
+import 'blackout_and_roster.dart';
 
 /// Week-view "mutual calendar": village help requests + your own schedule blocks.
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -34,6 +35,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       appBar: AppBar(
         title: const Text('Calendar'),
         actions: [
+          IconButton(
+            tooltip: 'Who’s available',
+            icon: const Icon(Icons.people_alt_outlined),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const WhoIsAvailableScreen(),
+            )),
+          ),
+          IconButton(
+            tooltip: 'Blackout dates',
+            icon: const Icon(Icons.event_busy),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const BlackoutDatesScreen(),
+            )),
+          ),
           IconButton(
             tooltip: 'My schedule',
             icon: const Icon(Icons.event_available),

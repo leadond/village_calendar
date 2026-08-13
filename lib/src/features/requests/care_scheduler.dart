@@ -155,9 +155,85 @@ class _DraftsReviewScreenState extends ConsumerState<DraftsReviewScreen> {
     ref.invalidate(myDraftsProvider);
   }
 
+  /// Lets the parent set the assistance type + which child for a generated slot.
+  Future<void> _editDetails(HelpRequest r) async {
+    final kids = ref.read(myKidsProvider).value ?? const [];
+    var category = r.category;
+    final selectedKids = {...r.kidIds};
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Type of assistance',
+                  style: Theme.of(ctx).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final c in HelpCategory.values)
+                    ChoiceChip(
+                      label: Text(c.label),
+                      selected: category == c,
+                      onSelected: (_) => setSheet(() => category = c),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text('Which child', style: Theme.of(ctx).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              if (kids.isEmpty)
+                const Text('No kids yet — add them in the Kids tab.'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final k in kids)
+                    FilterChip(
+                      label: Text(k.name),
+                      selected: selectedKids.contains(k.id),
+                      onSelected: (sel) => setSheet(() {
+                        if (sel) {
+                          selectedKids.add(k.id);
+                        } else {
+                          selectedKids.remove(k.id);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () async {
+                  await ref
+                      .read(helpRequestRepositoryProvider)
+                      .updateDraftDetails(r.id,
+                          category: category, kidIds: selectedKids.toList());
+                  ref.invalidate(myDraftsProvider);
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final drafts = ref.watch(myDraftsProvider).value ?? const [];
+    final kids = ref.watch(myKidsProvider).value ?? const [];
+    final kidNames = {for (final k in kids) k.id: k.name};
     return Scaffold(
       appBar: AppBar(
         title: const Text('Auto-scheduled drafts'),
@@ -208,11 +284,15 @@ class _DraftsReviewScreenState extends ConsumerState<DraftsReviewScreen> {
                   Card(
                     child: ListTile(
                       leading: const Icon(Icons.auto_awesome_outlined),
+                      isThreeLine: true,
+                      onTap: () => _editDetails(r),
                       title: Text(r.title),
                       subtitle: Text(
                         '${DateFormat('EEE, MMM d').format(r.scheduledStart)} · '
                         '${DateFormat('h:mm a').format(r.scheduledStart)}'
-                        '${r.scheduledEnd != null ? ' – ${DateFormat('h:mm a').format(r.scheduledEnd!)}' : ''}',
+                        '${r.scheduledEnd != null ? ' – ${DateFormat('h:mm a').format(r.scheduledEnd!)}' : ''}\n'
+                        '${r.category.label} · '
+                        '${r.kidIds.isEmpty ? 'tap to set child' : r.kidIds.map((id) => kidNames[id] ?? 'child').join(', ')}',
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,

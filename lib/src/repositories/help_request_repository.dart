@@ -10,7 +10,7 @@ class HelpRequestRepository {
   static const _columns =
       'id, village_id, creator_id, helper_id, title, description, category, '
       'status, scheduled_start, scheduled_at, scheduled_end, pickup_address, '
-      'dropoff_address, special_instructions, kid_ids, parent_confirmed_at, '
+      'dropoff_address, special_instructions, kid_ids, child_schedule_blocks, parent_confirmed_at, '
       'helper_checkin_at, arrived_at_destination_at, parent_receipt_confirmed_at, '
       'created_at';
 
@@ -138,7 +138,9 @@ class HelpRequestRepository {
 
   /// Publishes a draft -> visible to helpers + triggers availability-aware notify.
   Future<void> publishDraft(String id) async {
-    await _client.from('help_requests').update({'is_draft': false}).eq('id', id);
+    await _client
+        .from('help_requests')
+        .update({'is_draft': false}).eq('id', id);
   }
 
   Future<void> updateSchedule(String id, DateTime start, DateTime end) async {
@@ -147,6 +149,22 @@ class HelpRequestRepository {
       'scheduled_start': start.toUtc().toIso8601String(),
       'scheduled_end': end.toUtc().toIso8601String(),
     }).eq('id', id);
+  }
+
+  /// Updates a draft's assistance type + which kids it's for.
+  Future<void> updateDraftDetails(
+    String id, {
+    required HelpCategory category,
+    required List<String> kidIds,
+    String? title,
+  }) async {
+    final patch = <String, dynamic>{
+      'category': category.value,
+      'request_type': category.legacyRequestType,
+      'kid_ids': kidIds,
+    };
+    if (title != null) patch['title'] = title;
+    await _client.from('help_requests').update(patch).eq('id', id);
   }
 
   Future<void> deleteRequest(String id) async {
