@@ -103,6 +103,8 @@ class _AddAvailabilitySheet extends ConsumerStatefulWidget {
 class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
   late String _kind = widget.defaultKind;
   final Set<int> _weekdays = {DateTime.now().weekday % 7};
+  bool _useSpecificDate = false;
+  DateTime? _specificDate;
   TimeOfDay _start = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _end = const TimeOfDay(hour: 17, minute: 0);
   final _note = TextEditingController();
@@ -118,7 +120,14 @@ class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
 
   Future<void> _save() async {
     final profile = ref.read(currentProfileProvider).value;
-    if (profile == null || !profile.hasVillage || _weekdays.isEmpty) return;
+    if (profile == null || !profile.hasVillage) return;
+    if (!_useSpecificDate && _weekdays.isEmpty) return;
+    if (_useSpecificDate && _specificDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a date.')),
+      );
+      return;
+    }
     if (_mins(_end) <= _mins(_start)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('End time must be after start time.')),
@@ -128,15 +137,27 @@ class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
     setState(() => _busy = true);
     try {
       final repo = ref.read(availabilityRepositoryProvider);
-      for (final wd in _weekdays) {
+      final note = _note.text.trim().isEmpty ? null : _note.text.trim();
+      if (_useSpecificDate) {
         await repo.add(
           villageId: profile.villageId!,
           kind: _kind,
           startMinutes: _mins(_start),
           endMinutes: _mins(_end),
-          weekday: wd,
-          note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+          specificDate: _specificDate,
+          note: note,
         );
+      } else {
+        for (final wd in _weekdays) {
+          await repo.add(
+            villageId: profile.villageId!,
+            kind: _kind,
+            startMinutes: _mins(_start),
+            endMinutes: _mins(_end),
+            weekday: wd,
+            note: note,
+          );
+        }
       }
       ref.invalidate(myAvailabilityProvider);
       ref.invalidate(villageAvailabilityProvider);
@@ -179,25 +200,54 @@ class _AddAvailabilitySheetState extends ConsumerState<_AddAvailabilitySheet> {
             ],
           ),
           const SizedBox(height: 12),
-          const Text('Repeats on'),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            children: [
-              for (var wd = 0; wd < 7; wd++)
-                FilterChip(
-                  label: Text(kWeekdayNames[wd]),
-                  selected: _weekdays.contains(wd),
-                  onSelected: (sel) => setState(() {
-                    if (sel) {
-                      _weekdays.add(wd);
-                    } else {
-                      _weekdays.remove(wd);
-                    }
-                  }),
-                ),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Weekly')),
+              ButtonSegment(value: true, label: Text('Specific date')),
             ],
+            selected: {_useSpecificDate},
+            onSelectionChanged: (s) =>
+                setState(() => _useSpecificDate = s.first),
           ),
+          const SizedBox(height: 8),
+          if (_useSpecificDate)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.event),
+              label: Text(_specificDate == null
+                  ? 'Pick a date'
+                  : '${_specificDate!.month}/${_specificDate!.day}/${_specificDate!.year}'),
+              onPressed: () async {
+                final now = DateTime.now();
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _specificDate ?? now,
+                  firstDate: DateTime(now.year, now.month, now.day),
+                  lastDate: now.add(const Duration(days: 365)),
+                );
+                if (picked != null) setState(() => _specificDate = picked);
+              },
+            )
+          else ...[
+            const Text('Repeats on'),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (var wd = 0; wd < 7; wd++)
+                  FilterChip(
+                    label: Text(kWeekdayNames[wd]),
+                    selected: _weekdays.contains(wd),
+                    onSelected: (sel) => setState(() {
+                      if (sel) {
+                        _weekdays.add(wd);
+                      } else {
+                        _weekdays.remove(wd);
+                      }
+                    }),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             children: [
